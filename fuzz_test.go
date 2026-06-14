@@ -54,13 +54,16 @@ func FuzzDot(f *testing.F) {
 		a := bytesToF64(data)
 		half := len(a) / 2
 		x, y := a[:half], a[half:half*2]
-		if got, want := Dot(x, y), dotLanes(x, y); !closeRel(got, want, 1e-9) {
+		// Condition-number-aware bound: a dot's error scales with Σ|aᵢbᵢ|, not the
+		// (possibly near-zero) result, so cancellation between large terms must not
+		// be flagged as a kernel bug.
+		if got, want := Dot(x, y), dotLanes(x, y); !closeDot(got, want, absSumProd64(x, y), 1e-9) {
 			t.Errorf("Dot mismatch: got %v want %v (n=%d)", got, want, len(x))
 		}
 		af := bytesToF32(data)
 		fhalf := len(af) / 2
 		xf, yf := af[:fhalf], af[fhalf:fhalf*2]
-		if got, want := float64(Float32Dot(xf, yf)), float64(dotLanes32(xf, yf)); !closeRel(got, want, 1e-3) {
+		if got, want := float64(Float32Dot(xf, yf)), float64(dotLanes32(xf, yf)); !closeDot(got, want, absSumProd32(xf, yf), 1e-3) {
 			t.Errorf("Float32Dot mismatch: got %v want %v (n=%d)", got, want, len(xf))
 		}
 	})

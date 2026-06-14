@@ -21,20 +21,20 @@ func TestDispatchRISCV64(t *testing.T) {
 	check := func(label string) {
 		for _, n := range szs {
 			a, b := randF64(n, rng), randF64(n, rng)
-			if got, want := dot(a, b), dotLanes(a, b); !closeRel(got, want, relTol64) {
+			if got, want := dot(a, b), dotLanes(a, b); !closeDot(got, want, absSumProd64(a, b), relTol64) {
 				t.Fatalf("%s dot n=%d: %v != %v", label, n, got, want)
 			}
-			if got, want := sum(a), sumLanes(a); !closeRel(got, want, relTol64) {
+			if got, want := sum(a), sumLanes(a); !closeDot(got, want, absSum64(a), relTol64) {
 				t.Fatalf("%s sum n=%d: %v != %v", label, n, got, want)
 			}
 			if got, want := sumSqDiff(a, b), sumSqDiffLanes(a, b); !closeRel(got, want, relTol64) {
 				t.Fatalf("%s ssd n=%d: %v != %v", label, n, got, want)
 			}
 			af, bf := randF32(n, rng), randF32(n, rng)
-			if got, want := float64(dot32(af, bf)), float64(dotLanes32(af, bf)); !closeRel(got, want, relTol32) {
+			if got, want := float64(dot32(af, bf)), float64(dotLanes32(af, bf)); !closeDot(got, want, absSumProd32(af, bf), relTol32) {
 				t.Fatalf("%s dot32 n=%d: %v != %v", label, n, got, want)
 			}
-			if got, want := float64(sum32(af)), float64(sumLanes32(af)); !closeRel(got, want, relTol32) {
+			if got, want := float64(sum32(af)), float64(sumLanes32(af)); !closeDot(got, want, absSum32(af), relTol32) {
 				t.Fatalf("%s sum32 n=%d: %v != %v", label, n, got, want)
 			}
 			if got, want := float64(sumSqDiff32(af, bf)), float64(sumSqDiffLanes32(af, bf)); !closeRel(got, want, relTol32) {

@@ -29,6 +29,51 @@ func closeRel(got, want, tol float64) bool {
 	return d/a <= tol
 }
 
+// closeDot compares a dot-product result against the reference with a
+// condition-number-aware bound. A dot product's absolute rounding error is
+// proportional to the sum of the absolute term magnitudes Σ|aᵢbᵢ|, NOT to the
+// (possibly near-zero, post-cancellation) result — so when large terms cancel,
+// |got-want| can be far larger than tol·|want| while both answers are still
+// correct to a few ULP of the work done. The bound here is tol·(|want| + Σ|aᵢbᵢ|).
+func closeDot(got, want float64, mag, tol float64) bool {
+	if math.IsNaN(got) && math.IsNaN(want) {
+		return true
+	}
+	return math.Abs(got-want) <= tol*(math.Abs(want)+mag)
+}
+
+func absSumProd64(a, b []float64) float64 {
+	var s float64
+	for i := range a {
+		s += math.Abs(a[i] * b[i])
+	}
+	return s
+}
+
+func absSumProd32(a, b []float32) float64 {
+	var s float64
+	for i := range a {
+		s += math.Abs(float64(a[i]) * float64(b[i]))
+	}
+	return s
+}
+
+func absSum64(a []float64) float64 {
+	var s float64
+	for _, v := range a {
+		s += math.Abs(v)
+	}
+	return s
+}
+
+func absSum32(a []float32) float64 {
+	var s float64
+	for _, v := range a {
+		s += math.Abs(float64(v))
+	}
+	return s
+}
+
 // sizes spans below/at/above the vector strides (2,4,8) plus larger blocks and a
 // few odd tails, so every kernel exercises its vector body, horizontal fold and
 // scalar tail.
@@ -54,11 +99,11 @@ func TestDot(t *testing.T) {
 	rng := rand.New(rand.NewSource(1))
 	for _, n := range sizes {
 		a, b := randF64(n, rng), randF64(n, rng)
-		if got, want := Dot(a, b), dotLanes(a, b); !closeRel(got, want, relTol64) {
+		if got, want := Dot(a, b), dotLanes(a, b); !closeDot(got, want, absSumProd64(a, b), relTol64) {
 			t.Errorf("Dot n=%d: got %v want %v", n, got, want)
 		}
 		af, bf := randF32(n, rng), randF32(n, rng)
-		if got, want := float64(Float32Dot(af, bf)), float64(dotLanes32(af, bf)); !closeRel(got, want, relTol32) {
+		if got, want := float64(Float32Dot(af, bf)), float64(dotLanes32(af, bf)); !closeDot(got, want, absSumProd32(af, bf), relTol32) {
 			t.Errorf("Float32Dot n=%d: got %v want %v", n, got, want)
 		}
 	}
@@ -68,11 +113,11 @@ func TestSum(t *testing.T) {
 	rng := rand.New(rand.NewSource(2))
 	for _, n := range sizes {
 		a := randF64(n, rng)
-		if got, want := Sum(a), sumLanes(a); !closeRel(got, want, relTol64) {
+		if got, want := Sum(a), sumLanes(a); !closeDot(got, want, absSum64(a), relTol64) {
 			t.Errorf("Sum n=%d: got %v want %v", n, got, want)
 		}
 		af := randF32(n, rng)
-		if got, want := float64(Float32Sum(af)), float64(sumLanes32(af)); !closeRel(got, want, relTol32) {
+		if got, want := float64(Float32Sum(af)), float64(sumLanes32(af)); !closeDot(got, want, absSum32(af), relTol32) {
 			t.Errorf("Float32Sum n=%d: got %v want %v", n, got, want)
 		}
 	}
