@@ -116,9 +116,18 @@ differential tests and fuzzers natively. On throughput, the honest result is
 naive loop, so the VSX kernel runs at roughly the same speed as the
 autovectorized scalar — the same compiler-friendly / bandwidth-bound regime that
 keeps several of these reductions close to scalar elsewhere. No speedup is
-claimed for ppc64le. **s390x, riscv64 and loong64 stay QEMU-validated for
-correctness only; native throughput pending** (s390x specifically pending a
-GitHub-hosted IBM Z runner).
+claimed for ppc64le.
+
+**riscv64 is now validated on a real SpacemiT X60 (RVV 1.0)** (GCC Compile Farm,
+https://portal.cfarm.net/, Go 1.26.4, June 2026): the RVV kernel passes the
+differential tests and fuzzers natively. As with ppc64le, the honest throughput
+result is **no SIMD win — parity to a slight loss**: the X60's compiler
+auto-vectorizes the naive reduction, so the RVV kernel runs at or just below it
+(`Dot/4096` simd ~2078 MB/s vs naive ~2522 MB/s on this core). The X60 is a
+low-power *in-order* RVV core — the only widely-available RVV silicon today — and
+these reductions are bandwidth-bound, so we claim no speedup for riscv64 here. **s390x
+and loong64 stay QEMU-validated for correctness only; native throughput pending**
+(s390x specifically pending a GitHub-hosted IBM Z runner).
 
 ### Seventh architecture: ppc64 (big-endian)
 
