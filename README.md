@@ -1,3 +1,5 @@
+<p align="center"><img src="https://raw.githubusercontent.com/go-simd/brand/main/social/go-simd.png" alt="go-simd/floats" width="720"></p>
+
 # floats
 
 [![CI](https://github.com/go-simd/floats/actions/workflows/ci.yml/badge.svg)](https://github.com/go-simd/floats/actions/workflows/ci.yml)
@@ -107,35 +109,9 @@ reach for SIMD anyway.
 **Honesty note on the other arches.** amd64's AVX2+FMA kernel is validated for
 *correctness* on real x86 (an AVX2/FMA-capable VM) but the native-hardware
 *throughput* numbers are pending (the CI/dev x86 runner used here is
-TCG-emulated, so its timings are not representative).
-
-**ppc64le is now validated on real POWER10 silicon** (GCC Compile Farm,
-https://portal.cfarm.net/, VSX, Go 1.26.4, June 2026): the VSX kernel passes the
-differential tests and fuzzers natively. On throughput, the honest result is
-**parity, not a win**: at this size the POWER10 compiler auto-vectorizes the
-naive loop, so the VSX kernel runs at roughly the same speed as the
-autovectorized scalar — the same compiler-friendly / bandwidth-bound regime that
-keeps several of these reductions close to scalar elsewhere. No speedup is
-claimed for ppc64le.
-
-**riscv64 is now validated on a real SpacemiT X60 (RVV 1.0)** (GCC Compile Farm,
-https://portal.cfarm.net/, Go 1.26.4, June 2026): the RVV kernel passes the
-differential tests and fuzzers natively. As with ppc64le, the honest throughput
-result is **no SIMD win — parity to a slight loss**: the X60's compiler
-auto-vectorizes the naive reduction, so the RVV kernel runs at or just below it
-(`Dot/4096` simd ~2078 MB/s vs naive ~2522 MB/s on this core). The X60 is a
-low-power *in-order* RVV core — the only widely-available RVV silicon today — and
-these reductions are bandwidth-bound, so we claim no speedup for riscv64 here. **s390x
-and loong64 stay QEMU-validated for correctness only; native throughput pending**
-(s390x specifically pending a GitHub-hosted IBM Z runner).
-
-### Seventh architecture: ppc64 (big-endian)
-
-Beyond the six SIMD targets, the scalar reference is now build- and test-
-validated on **ppc64 (big-endian)** on real POWER9 silicon (GCC Compile Farm) —
-within the documented ULP tolerance on a big-endian target distinct from s390x's
-vector kernel. ppc64 BE carries no VSX build tag, so it takes the scalar path.
-Framing: **six SIMD targets, validated on seven architectures.**
+TCG-emulated, so its timings are not representative). ppc64le, s390x, riscv64
+and loong64 are **QEMU-validated for correctness**; native-hardware performance
+numbers are pending access to that hardware.
 
 ## License
 
