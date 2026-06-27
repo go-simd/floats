@@ -65,7 +65,7 @@ scalar tail.
 | arm64   | NEON | `VFMLA` | 4 accumulators, ×4 unroll for ILP; baseline, no gate |
 | riscv64 | RVV | `VFMUL`+`VFREDOSUMVS` | length-agnostic `VSETVLI` stripmining; gated on `cpu.RISCV64.HasV` |
 | s390x   | vector facility (**big-endian**) | `VFMADB` | float64 vectorised; float32 uses the scalar reference (no `.SB` ops in the assembler); z13 baseline, no gate |
-| ppc64le | VSX | `XVMADDADP`/`XVMADDASP` | the XV* ops are `WORD`-encoded (not in the released assembler); POWER8 baseline, no gate |
+| ppc64le | VSX (**float32 only**) | `XVMADDASP` | the XV* ops are `WORD`-encoded (not in the released assembler); gated on `cpu.PPC64.IsPOWER9` (the SP ops are ISA-3.0). **float64 has no VSX kernel** — on real POWER9 the gc-autovectorized scalar loop beats it (see below), so float64 routes to that loop |
 | loong64 | LSX | `vfmadd.d`/`vfmadd.s` | LSX FP ops `WORD`-encoded; LA464 baseline, no gate |
 
 The `.s` files are committed; regenerate with `go run *_gen.go` (the generators
@@ -109,9 +109,26 @@ reach for SIMD anyway.
 **Honesty note on the other arches.** amd64's AVX2+FMA kernel is validated for
 *correctness* on real x86 (an AVX2/FMA-capable VM) but the native-hardware
 *throughput* numbers are pending (the CI/dev x86 runner used here is
-TCG-emulated, so its timings are not representative). ppc64le, s390x, riscv64
-and loong64 are **QEMU-validated for correctness**; native-hardware performance
-numbers are pending access to that hardware.
+TCG-emulated, so its timings are not representative). s390x, riscv64 and loong64
+are **QEMU-validated for correctness**; native-hardware performance numbers are
+pending access to that hardware.
+
+**ppc64le — measured on real POWER9** (GCC Compile Farm cfarm433, go1.26.4,
+2026-06-27, `Dot` throughput MB/s, higher is better):
+
+| n | float64 (autovectorized) | float64 if it used VSX | float32 VSX | float32 naive |
+|---|---|---|---|---|
+| 8    | 5700 | 2520 | 1755 | 2100 |
+| 512  | 8700 | 6200 | 6340 | 4100 |
+| 4096 | 9030 | 6200 | 6650 | 4150 |
+
+For **float64**, the gc compiler already autovectorizes the plain reduction loop,
+and on POWER9 that beats the VSX kernel (VSX was ~0.82× at n≥512), so per this
+library's dispatch principle — never run a SIMD kernel where it loses to the
+scalar/autovectorized path — there is no float64 VSX kernel on ppc64le; the
+reductions route to the autovectorizable loop instead. For **float32**, VSX wins
+(~1.55–1.61× over naive for n≥64), so the float32 kernel is kept (POWER9-gated).
+Correctness on ppc64le is validated under QEMU *and* on real POWER9 silicon.
 
 ## License
 
