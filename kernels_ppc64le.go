@@ -17,10 +17,14 @@ import "golang.org/x/sys/cpu"
 //     do NOT use the lane-blocked reference (reference.go) here: its multi-lane
 //     fold defeats autovectorization and is ~2× slower than both naive and VSX.
 //
-//   - float32: VSX KEPT. On the same POWER9 the f32 VSX kernel WINS ~1.55–1.61×
-//     over the naive loop for n>=64 (it only trails at the tiny n=8). The kernel
-//     emits ISA-3.0 (POWER9) VSX instructions that SIGILL on POWER8, so it is
-//     gated behind hasVSX (cpu.PPC64.IsPOWER9); pre-POWER9 falls back to the
+//   - float32: VSX KEPT and now also enabled on POWER8. On POWER9 the f32 VSX
+//     kernel WINS ~1.55–1.61× over the naive loop for n>=64. The kernel emits only
+//     ISA-2.06 VSX ops (LXVW4X + xvmaddasp/xvaddsp/xvsubsp via WORD), all valid on
+//     POWER8 — it was previously POWER9-gated out of caution, but it runs cleanly
+//     on POWER8E (cfarm112) and there it WINS even bigger (the gc autovectorizer
+//     is weaker on the POWER8 target, so the naive f32 loop is slow): measured
+//     ~3.0× Dot at n=64, ~3.97× Dot / ~4.4× SumSqDiff / ~2.0× Sum at n=1024. So it
+//     is gated behind hasVSX = POWER8+; pre-POWER8 (no AltiVec) falls back to the
 //     naive f32 loop.
 //
 // Only the three f32 kernels are generated into kernels_ppc64le.s.
@@ -28,11 +32,11 @@ func dot32VSX(a, b []float32) float32
 func sum32VSX(a []float32) float32
 func sumSqDiff32VSX(a, b []float32) float32
 
-// hasVSX gates the f32 VSX kernels. They use ISA-3.0 (POWER9) instructions
-// illegal on POWER8, so they run only on POWER9+; otherwise the naive f32 loop
-// is used. It is a var (not a const) so the dispatch test can drive the
-// fallback.
-var hasVSX = cpu.PPC64.IsPOWER9
+// hasVSX gates the f32 VSX kernels. They use only ISA-2.06 VSX ops (the ppc64le
+// baseline is POWER8/ISA-2.07, which includes them), so they run on POWER8+;
+// otherwise the naive f32 loop is used. It is a var (not a const) so the dispatch
+// test can drive the fallback.
+var hasVSX = cpu.PPC64.IsPOWER8
 
 // ---- float64: naive autovectorizable loops (faster than VSX on POWER9) ----
 

@@ -5,8 +5,6 @@ package floats
 import (
 	"math/rand"
 	"testing"
-
-	"golang.org/x/sys/cpu"
 )
 
 // TestDispatchPPC64LE drives both ppc64le dispatch paths to 100% coverage.
@@ -18,10 +16,10 @@ import (
 //
 // The float32 reductions keep the VSX kernel behind hasVSX. This test toggles
 // hasVSX (restoring it with defer) to cover BOTH the VSX branch and the naive
-// f32 fallback. The fallback (hasVSX=false) is always safe. The kernel branch
-// emits ISA-3.0 (POWER9) instructions that SIGILL on POWER8, so it is forced on
-// only when the host is genuinely POWER9+. Under the QEMU power9 CI target
-// IsPOWER9 is true, so both branches are covered there.
+// f32 fallback. The kernel emits only ISA-2.06 VSX ops (the ppc64le/POWER8
+// baseline), so it does not SIGILL on POWER8 and both branches are forced
+// unconditionally here. The QEMU power8 and power9 CI jobs plus the native
+// POWER8E/POWER9 farm runs all cover the kernel branch.
 func TestDispatchPPC64LE(t *testing.T) {
 	saved := hasVSX
 	defer func() { hasVSX = saved }()
@@ -63,12 +61,8 @@ func TestDispatchPPC64LE(t *testing.T) {
 	hasVSX = false
 	checkF32("f32 fallback")
 
-	// VSX f32 kernel: ISA-3.0 (POWER9) instructions SIGILL on POWER8, so only
-	// force the VSX branch on a genuine POWER9+ host (true under QEMU power9 CI).
-	if !cpu.PPC64.IsPOWER9 {
-		t.Log("pre-POWER9 host; VSX f32 kernel branch not exercised")
-		return
-	}
+	// VSX f32 kernel: ISA-2.06 ops only (POWER8 baseline), so force it on
+	// unconditionally — it runs on every ppc64le host.
 	hasVSX = true
 	checkF32("f32 kernel")
 }
