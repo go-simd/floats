@@ -64,7 +64,7 @@ scalar tail.
 | amd64   | AVX2 + FMA3 | `VFMADD231P{S,D}` | runtime-gated on `cpu.X86.HasAVX2 && HasFMA`; scalar fallback otherwise |
 | arm64   | NEON | `VFMLA` | 4 accumulators, ×4 unroll for ILP; baseline, no gate |
 | riscv64 | RVV | `VFMUL`+`VFREDOSUMVS` | length-agnostic `VSETVLI` stripmining; gated on `cpu.RISCV64.HasV` |
-| s390x   | vector facility (**big-endian**) | `VFMADB` | float64 vectorised; float32 uses the scalar reference (no `.SB` ops in the assembler); z13 baseline, no gate |
+| s390x   | vector facility (**big-endian**) | *(compiler autovector)* | float64 + float32 both route to the naive-shape lane-blocked reference — measured on real z15 (LPAR / VXE2) the Go compiler generates a wider 4-way-unrolled VXE2 pipeline than the previous hand-asm 2-lane `VFMADB` kernel could reach (2773 → **1588 ns @ 4096**, 11.8 → **20.6 GB/s**). Hand-asm removed; go-asmgen can revisit with a 4-8 accumulator kernel |
 | ppc64le | VSX (**float32 only**) | `XVMADDASP` | the XV* ops are `WORD`-encoded (not in the released assembler); gated on `cpu.PPC64.IsPOWER9` (the SP ops are ISA-3.0). **float64 has no VSX kernel** — on real POWER9 the gc-autovectorized scalar loop beats it (see below), so float64 routes to that loop |
 | loong64 | LSX | `vfmadd.d`/`vfmadd.s` | LSX FP ops `WORD`-encoded; LA464 baseline, no gate |
 
@@ -109,9 +109,14 @@ reach for SIMD anyway.
 **Honesty note on the other arches.** amd64's AVX2+FMA kernel is validated for
 *correctness* on real x86 (an AVX2/FMA-capable VM) but the native-hardware
 *throughput* numbers are pending (the CI/dev x86 runner used here is
-TCG-emulated, so its timings are not representative). s390x, riscv64 and loong64
+TCG-emulated, so its timings are not representative). riscv64 and loong64
 are **QEMU-validated for correctness**; native-hardware performance numbers are
-pending access to that hardware.
+pending access to that hardware. **s390x** is now **measured on real z15
+(LPAR guest, VXE2, Ubuntu 6.8, go1.26.4, 2026-07-03):** `BenchmarkDot/4096`
+lands at 20.6 GB/s = parity with the compiler-autovectorized naive loop
+(regression from the earlier hand-asm 2-lane `VFMADB` kernel closed by
+routing float64 through the naive-shape reference — see the arch table
+above).
 
 **ppc64le — measured on real POWER9** (GCC Compile Farm cfarm433, go1.26.4,
 2026-06-27, `Dot` throughput MB/s, higher is better):
