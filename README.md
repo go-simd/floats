@@ -64,7 +64,7 @@ scalar tail.
 | amd64   | AVX2 + FMA3 | `VFMADD231P{S,D}` | runtime-gated on `cpu.X86.HasAVX2 && HasFMA`; scalar fallback otherwise |
 | arm64   | NEON | `VFMLA` | 4 accumulators, ×4 unroll for ILP; baseline, no gate |
 | riscv64 | RVV | `VFMUL`+`VFREDOSUMVS` | length-agnostic `VSETVLI` stripmining; gated on `cpu.RISCV64.HasV` |
-| s390x   | vector facility (**big-endian**) | `VFMADB` | float64 vectorised; float32 uses the scalar reference (no `.SB` ops in the assembler); z13 baseline, no gate |
+| s390x   | vector facility (**big-endian**) | `VFMADB` | `Sum`/`SumSqDiff` vectorised; float32 uses the scalar reference (no `.SB` ops in the assembler); z13 baseline, no gate. **float64 `Dot` has no VX kernel** — on real z15 the `VFMADB` dot kernel measured 0.56× the gc-autovectorized scalar loop (11.6 vs 20.6 GB/s), so `Dot` routes to that loop instead (see below) |
 | ppc64le | VSX (**float32 only**) | `XVMADDASP` | the XV* ops are `WORD`-encoded (not in the released assembler); gated on `cpu.PPC64.IsPOWER9` (the SP ops are ISA-3.0). **float64 has no VSX kernel** — on real POWER9 the gc-autovectorized scalar loop beats it (see below), so float64 routes to that loop |
 | loong64 | LSX | `vfmadd.d`/`vfmadd.s` | LSX FP ops `WORD`-encoded; LA464 baseline, no gate |
 
@@ -109,9 +109,9 @@ reach for SIMD anyway.
 **Honesty note on the other arches.** amd64's AVX2+FMA kernel is validated for
 *correctness* on real x86 (an AVX2/FMA-capable VM) but the native-hardware
 *throughput* numbers are pending (the CI/dev x86 runner used here is
-TCG-emulated, so its timings are not representative). s390x, riscv64 and loong64
+TCG-emulated, so its timings are not representative). riscv64 and loong64
 are **QEMU-validated for correctness**; native-hardware performance numbers are
-pending access to that hardware.
+pending access to that hardware. s390x is now measured on real z15 (below).
 
 **ppc64le — measured on real POWER9** (GCC Compile Farm cfarm433, go1.26.4,
 2026-06-27, `Dot` throughput MB/s, higher is better):
@@ -129,6 +129,19 @@ scalar/autovectorized path — there is no float64 VSX kernel on ppc64le; the
 reductions route to the autovectorizable loop instead. For **float32**, VSX wins
 (~1.55–1.61× over naive for n≥64), so the float32 kernel is kept (POWER9-gated).
 Correctness on ppc64le is validated under QEMU *and* on real POWER9 silicon.
+
+**s390x (IBM z15, VXE2, measured 2026-07-03)** — linux1, go1.26.4, `-count=6`,
+`Dot` throughput GB/s, higher is better. For **float64** `Dot`, the gc compiler
+already autovectorizes the plain reduction loop, and on z15 that beats the
+`VFMADB` VX kernel (VX **11.6 GB/s** vs the autovectorized loop's **20.6 GB/s**
+= **0.56×**). Per this library's dispatch principle — never run a SIMD kernel
+where it loses to the scalar/autovectorized path — there is no float64 `Dot` VX
+kernel on s390x; `Dot` routes to the autovectorizable loop instead, so it now
+runs at **1.00× parity (20.6 GB/s)** rather than the pre-fix 0.56× loss. `Sum`
+and `SumSqDiff` keep their `VFMADB` VX kernels (not measured as losses on z15),
+and `Distance`/`CosineSimilarity` build on those and are unchanged; float32 uses
+the lane-blocked scalar reference as before. Correctness on s390x is validated
+under QEMU *and* on real z15 silicon.
 
 ## License
 
