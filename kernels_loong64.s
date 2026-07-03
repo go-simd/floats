@@ -4,6 +4,117 @@
 
 #include "textflag.h"
 
+TEXT ·dotLSX(SB), NOSPLIT, $48-56
+	MOVV a_base+0(FP), R4
+	MOVV a_len+8(FP), R5
+	MOVV b_base+24(FP), R6
+	WORD $0x71270842
+	MOVV $0, R7
+vloop:
+	ADDV $2, R7, R9
+	BLT R5, R9, vtail
+	SLLV $3, R7, R8
+	ADDV R4, R8, R10
+	VMOVQ (R10), V0
+	ADDV R6, R8, R11
+	VMOVQ (R11), V1
+	WORD $0x09210402
+	ADDV $2, R7, R7
+	JMP vloop
+vtail:
+	MOVV $32, R11
+	ADDV R3, R11, R11
+	VMOVQ V2, (R11)
+	MOVD (R11), F0
+	MOVD 8(R11), F1
+	ADDD F0, F1, F0
+sloop:
+	BGE R7, R5, done
+	SLLV $3, R7, R8
+	ADDV R4, R8, R10
+	MOVD (R10), F1
+	ADDV R6, R8, R11
+	MOVD (R11), F2
+	FMADDD F0, F1, F2, F0
+	ADDV $1, R7, R7
+	JMP sloop
+done:
+	MOVD F0, ret+48(FP)
+	RET
+
+TEXT ·sumLSX(SB), NOSPLIT, $48-32
+	MOVV a_base+0(FP), R4
+	MOVV a_len+8(FP), R5
+	WORD $0x71270842
+	MOVV $0, R7
+vloop:
+	ADDV $2, R7, R9
+	BLT R5, R9, vtail
+	SLLV $3, R7, R8
+	ADDV R4, R8, R10
+	VMOVQ (R10), V0
+	WORD $0x71310802
+	ADDV $2, R7, R7
+	JMP vloop
+vtail:
+	MOVV $32, R11
+	ADDV R3, R11, R11
+	VMOVQ V2, (R11)
+	MOVD (R11), F0
+	MOVD 8(R11), F1
+	ADDD F0, F1, F0
+sloop:
+	BGE R7, R5, done
+	SLLV $3, R7, R8
+	ADDV R4, R8, R10
+	MOVD (R10), F1
+	ADDD F0, F1, F0
+	ADDV $1, R7, R7
+	JMP sloop
+done:
+	MOVD F0, ret+24(FP)
+	RET
+
+TEXT ·sumSqDiffLSX(SB), NOSPLIT, $48-56
+	MOVV a_base+0(FP), R4
+	MOVV a_len+8(FP), R5
+	MOVV b_base+24(FP), R6
+	WORD $0x71270842
+	MOVV $0, R7
+vloop:
+	ADDV $2, R7, R9
+	BLT R5, R9, vtail
+	SLLV $3, R7, R8
+	ADDV R4, R8, R10
+	VMOVQ (R10), V0
+	ADDV R6, R8, R11
+	VMOVQ (R11), V1
+	WORD $0x71330403
+	WORD $0x09210c62
+	ADDV $2, R7, R7
+	JMP vloop
+vtail:
+	MOVV $32, R11
+	ADDV R3, R11, R11
+	VMOVQ V2, (R11)
+	MOVD (R11), F0
+	MOVD 8(R11), F1
+	ADDD F0, F1, F0
+sloop:
+	BGE R7, R5, done
+	SLLV $3, R7, R8
+	ADDV R4, R8, R10
+	MOVD (R10), F1
+	ADDV R6, R8, R11
+	MOVD (R11), F2
+	SUBD F2, F1, F1
+	FMADDD F0, F1, F1, F0
+	ADDV $1, R7, R7
+	JMP sloop
+done:
+	MOVD F0, ret+48(FP)
+	RET
+
 TEXT ·dot32LSX(SB), NOSPLIT, $48-52
 	MOVV a_base+0(FP), R4
 	MOVV a_len+8(FP), R5
