@@ -1,8 +1,16 @@
 //go:build ignore
 
 // Command gen produces kernels_s390x.s with go-asmgen: z/Architecture
-// vector-facility FMA reduction kernels for the float64 dot product, sum and
+// vector-facility FMA reduction kernels for the float64 sum and
 // sum-of-squared-differences.
+//
+// Float64 Dot has NO VX kernel here, deliberately. On real z15 silicon (linux1,
+// go1.26.4, 2026-07-03) the VFMADB dot kernel is SLOWER than the plain Go loop
+// the gc compiler already autovectorizes — measured Dot throughput VX vs naive
+// 11.6 GB/s vs 20.6 GB/s = 0.56×. Per the dispatch principle (never run a SIMD
+// kernel where it loses to the scalar/autovectorized path) the s390x Dot routes
+// to the naive autovectorizable loop instead (see kernels_s390x.go), so no dot
+// kernel is generated. Sum and SumSqDiff KEEP their VX kernels.
 //
 // Only float64 is vectorised: the released assembler exposes the double-element
 // vector-FP ops (VFMADB multiply-add, VFADB add, VFSDB subtract, VFMDB
@@ -59,7 +67,6 @@ func sumSig() abi.Signature {
 
 func main() {
 	f := emit.NewFile("s390x")
-	f.Add(dotF64().Func())
 	f.Add(sumF64().Func())
 	f.Add(ssdF64().Func())
 	if err := os.WriteFile("kernels_s390x.s", []byte(f.String()), 0o644); err != nil {
@@ -80,31 +87,6 @@ func foldV0(b *s390x.Builder) {
 
 // Register plan: R1 a_base, R2 a_len, R3 b_base (LoadArg); R4 i; R5/R6 addr;
 // V0 accumulator; V1/V2 chunks; V3 diff.
-
-func dotF64() *s390x.Builder {
-	b := s390x.NewFunc("dotVX", dotSig(), 0)
-	b.LoadArg("a_base", "R1").LoadArg("a_len", "R2").LoadArg("b_base", "R3").
-		Raw("VZERO V0").
-		Raw("MOVD $0, R4").
-		Label("vloop").
-		Raw("ADD $2, R4, R5").Raw("CMPBGT R5, R2, vtail").
-		Raw("SLD $3, R4, R6").
-		Raw("VL (R1)(R6*1), V1").
-		Raw("VL (R3)(R6*1), V2").
-		Raw("VFMADB V1, V2, V0, V0"). // V0 += a*b
-		Raw("ADD $2, R4, R4").Raw("BR vloop").
-		Label("vtail")
-	foldV0(b)
-	b.Label("sloop").
-		Raw("CMPBGE R4, R2, done").
-		Raw("SLD $3, R4, R6").
-		Raw("FMOVD (R1)(R6*1), F1").
-		Raw("FMOVD (R3)(R6*1), F2").
-		Raw("FMADD F1, F2, F0"). // F0 += a*b
-		Raw("ADD $1, R4, R4").Raw("BR sloop").
-		Label("done").StoreRet("F0", "ret").Ret()
-	return b
-}
 
 func sumF64() *s390x.Builder {
 	b := s390x.NewFunc("sumVX", sumSig(), 0)
