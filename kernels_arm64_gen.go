@@ -3,13 +3,13 @@
 // Command gen produces kernels_arm64.s with go-asmgen: NEON FMA reduction
 // kernels for the float32/float64 dot product, sum and sum-of-squared-diffs.
 //
-// The bulk loops fold with VFMLA (acc += a*b lane-wise) — the only vector-FP
-// FMA mnemonic the released assembler exposes; the wider vector add/sub/pairwise
-// ops (VFADD/VFADDP) are NOT available, so the kernels are built from VFMLA plus
-// two tricks: sum accumulates against a broadcast 1.0 vector (acc += a*1), and
-// the squared-difference kernel forms d=a−b with VFMLS against that same 1.0
-// vector (d = a − b*1, exact) before VFMLA d*d — which avoids the catastrophic
-// cancellation of the Σa²−2Σab+Σb² expansion on the distance hot path.
+// The bulk loops fold with VFMLA (acc += a*b lane-wise). The sum kernels
+// accumulate against a broadcast 1.0 vector (acc += a*1, which rounds exactly
+// like acc + a); they were written against an assembler with no vector-FP add.
+// The Go 1.27 assembler has VFADD/VFSUB/VFADDP. The squared-difference kernels
+// form d = a−b exactly (VFSUB for float32; VFMLS against 1.0 for float64, see
+// ssdF64) before VFMLA d*d — which avoids the catastrophic cancellation of the
+// Σa²−2Σab+Σb² expansion on the distance hot path.
 //
 // The dot kernels keep four independent accumulators and unroll ×4 for
 // instruction-level parallelism (otherwise a single 2-wide accumulator loses to
@@ -153,11 +153,17 @@ func sumF64() *arm64.Builder {
 	return b
 }
 
-// ssdF64 accumulates Σ(a−b)². The released assembler has no vector-FP subtract
-// mnemonic, so the difference is formed with VFMLS against a broadcast 1.0:
-// copy a into V7, then V7 -= b*1 gives V7 = a−b exactly (×1 is exact), and
-// VFMLA V7,V7,acc adds d². This avoids the catastrophic cancellation that the
-// Σa²−2Σab+Σb² expansion would suffer when a≈b — the distance hot path.
+// ssdF64 accumulates Σ(a−b)². The difference is formed with VFMLS against a
+// broadcast 1.0: copy a into V7, then V7 -= b*1 gives V7 = a−b exactly (×1 is
+// exact, one rounding), and VFMLA V7,V7,acc adds d². This avoids the
+// catastrophic cancellation that the Σa²−2Σab+Σb² expansion would suffer when
+// a≈b — the distance hot path.
+//
+// VFSUB (available since the Go 1.27 assembler) gives the same d bit for bit
+// and is what ssdF32 uses, but swapping it in here measured Distance/8 about 9%
+// slower on an Apple M4 Max. Padding the swapped kernel back to the old layout
+// with NOPs removed the gap, so the cost is code placement, not the
+// instruction; it stays VFMLS until that is addressed.
 func ssdF64() *arm64.Builder {
 	b := arm64.NewFunc("sumSqDiffNEON", dotSig(abi.Float64), 0)
 	b.LoadArg("a_base", "R0").LoadArg("a_len", "R1").LoadArg("b_base", "R2").
@@ -254,14 +260,12 @@ func ssdF32() *arm64.Builder {
 	b := arm64.NewFunc("sumSqDiff32NEON", dotSig(abi.Float32), 0)
 	b.LoadArg("a_base", "R0").LoadArg("a_len", "R1").LoadArg("b_base", "R2").
 		Raw("VEOR V0.B16, V0.B16, V0.B16").
-		Raw("FMOVS $(1.0), F3").Raw("VDUP V3.S[0], V3.S4"). // ones
 		Raw("MOVD $0, R3").
 		Label("vloop").
 		Raw("ADD $4, R3, R4").Raw("CMP R1, R4").Raw("BGT vtail").
 		Raw("ADD R3<<2, R0, R5").Raw("VLD1 (R5), [V1.S4]").
 		Raw("ADD R3<<2, R2, R6").Raw("VLD1 (R6), [V2.S4]").
-		Raw("VMOV V1.B16, V7.B16").       // d = a
-		Raw("VFMLS V3.S4, V2.S4, V7.S4"). // d -= b*1 => a-b
+		Raw("VFSUB V2.S4, V1.S4, V7.S4"). // d = a-b
 		Raw("VFMLA V7.S4, V7.S4, V0.S4"). // acc += d*d
 		Raw("ADD $4, R3, R3").Raw("B vloop").
 		Label("vtail")

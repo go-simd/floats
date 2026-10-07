@@ -233,8 +233,6 @@ TEXT ·sumSqDiff32NEON(SB), NOSPLIT, $0-52
 	MOVD a_len+8(FP), R1
 	MOVD b_base+24(FP), R2
 	VEOR V0.B16, V0.B16, V0.B16
-	FMOVS $(1.0), F3
-	VDUP V3.S[0], V3.S4
 	MOVD $0, R3
 vloop:
 	ADD $4, R3, R4
@@ -244,8 +242,7 @@ vloop:
 	VLD1 (R5), [V1.S4]
 	ADD R3<<2, R2, R6
 	VLD1 (R6), [V2.S4]
-	VMOV V1.B16, V7.B16
-	VFMLS V3.S4, V2.S4, V7.S4
+	VFSUB V2.S4, V1.S4, V7.S4
 	VFMLA V7.S4, V7.S4, V0.S4
 	ADD $4, R3, R3
 	B vloop
