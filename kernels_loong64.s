@@ -8,7 +8,7 @@ TEXT ·dot32LSX(SB), NOSPLIT, $48-52
 	MOVV a_base+0(FP), R4
 	MOVV a_len+8(FP), R5
 	MOVV b_base+24(FP), R6
-	WORD $0x71270842
+	VXORV V2, V2, V2
 	MOVV $0, R7
 vloop:
 	ADDV $4, R7, R9
@@ -49,7 +49,7 @@ done:
 TEXT ·sum32LSX(SB), NOSPLIT, $48-28
 	MOVV a_base+0(FP), R4
 	MOVV a_len+8(FP), R5
-	WORD $0x71270842
+	VXORV V2, V2, V2
 	MOVV $0, R7
 vloop:
 	ADDV $4, R7, R9
@@ -57,7 +57,7 @@ vloop:
 	SLLV $2, R7, R8
 	ADDV R4, R8, R10
 	VMOVQ (R10), V0
-	WORD $0x71308802
+	VADDF V2, V0, V2
 	ADDV $4, R7, R7
 	JMP vloop
 vtail:
@@ -87,7 +87,7 @@ TEXT ·sumSqDiff32LSX(SB), NOSPLIT, $48-52
 	MOVV a_base+0(FP), R4
 	MOVV a_len+8(FP), R5
 	MOVV b_base+24(FP), R6
-	WORD $0x71270842
+	VXORV V2, V2, V2
 	MOVV $0, R7
 vloop:
 	ADDV $4, R7, R9
@@ -97,7 +97,7 @@ vloop:
 	VMOVQ (R10), V0
 	ADDV R6, R8, R11
 	VMOVQ (R11), V1
-	WORD $0x71328403
+	VSUBF V1, V0, V3
 	WORD $0x09110c62
 	ADDV $4, R7, R7
 	JMP vloop

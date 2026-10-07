@@ -66,7 +66,7 @@ scalar tail.
 | riscv64 | RVV | `VFMUL`+`VFREDOSUMVS` | length-agnostic `VSETVLI` stripmining; gated on `cpu.RISCV64.HasV` |
 | s390x   | vector facility (**big-endian**) | `VFMADB` | `Sum`/`SumSqDiff` vectorised; float32 uses the scalar reference (no `.SB` ops in the assembler); z13 baseline, no gate. **float64 `Dot` has no VX kernel** — on real z15 the `VFMADB` dot kernel measured 0.56× the gc-autovectorized scalar loop (11.6 vs 20.6 GB/s), so `Dot` routes to that loop instead (see below) |
 | ppc64le | VSX (**float32 only**) | `XVMADDASP` | the XV* ops are `WORD`-encoded (not in the released assembler); gated on `cpu.PPC64.IsPOWER9` (the SP ops are ISA-3.0). **float64 has no VSX kernel** — on real POWER9 the gc-autovectorized scalar loop beats it (see below), so float64 routes to that loop |
-| loong64 | LSX | `vfmadd.d`/`vfmadd.s` | LSX FP ops `WORD`-encoded; LA464 baseline, no gate |
+| loong64 | LSX (**float32 only**) | `vfmadd.s` | `vfmadd.s` is `WORD`-encoded (no Go mnemonic yet); add/sub/xor use `VADDF`/`VSUBF`/`VXORV`. float64 routes to the gc-autovectorized loop. LA464 baseline, no gate |
 
 The `.s` files are committed; regenerate with `go run *_gen.go` (the generators
 are build-tagged `//go:build ignore`). All six are validated in CI — amd64/arm64
