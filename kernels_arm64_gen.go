@@ -164,6 +164,15 @@ func sumF64() *arm64.Builder {
 // slower on an Apple M4 Max. Padding the swapped kernel back to the old layout
 // with NOPs removed the gap, so the cost is code placement, not the
 // instruction; it stays VFMLS until that is addressed.
+//
+// Aligning the swapped loop does not address it. VFSUB with PCALIGN $16 or $32
+// before vloop (2026-10-07, M4 Max, Go 1.27.1, 12 runs alternating with this
+// kernel, load below 8, medians) measured Distance/8 +11.8% and +10.8% (12.01 →
+// 13.43 and 13.30 ns; +12.5% and +11.7% in a second series of 10), against
+// +6.5% for VFSUB unaligned. /64 was +1.6% and +0.6%, /512 and /4096 within
+// ±0.7%. Results were bit identical over 1e6 random inputs (NaN payloads
+// aside), so only speed kept it out. This loop starts at 12 mod 16; a 16- or
+// 32-byte aligned one is slower here.
 func ssdF64() *arm64.Builder {
 	b := arm64.NewFunc("sumSqDiffNEON", dotSig(abi.Float64), 0)
 	b.LoadArg("a_base", "R0").LoadArg("a_len", "R1").LoadArg("b_base", "R2").
