@@ -27,6 +27,10 @@ jobs:
       # Fuzz targets run over their seed corpus deterministically (no -fuzz, no
       # time box, no flake); randomized time-boxed fuzzing runs nightly in fuzz.yml.
       - run: go test -run '^Fuzz' ./...
+      - name: TEMPORARY elementwise benchmarks (to be removed before merge)
+        run: |
+          grep -m1 'model name' /proc/cpuinfo || true
+          for r in 1 2 3; do go test -run '^$' -bench 'Axpy|Xpby|Scale' -benchtime 200ms -cpu 1 .; done
   # macOS and Windows.
   #
   # A fleet audit of the 601 repositories holding Go code found the OS axis to
