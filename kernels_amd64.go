@@ -14,6 +14,14 @@ func dot32AVX2(a, b []float32) float32
 func sum32AVX2(a []float32) float32
 func sumSqDiff32AVX2(a, b []float32) float32
 
+// Elementwise float64 updates (kernels_amd64_gen.go): one VFMADD per element,
+// bit-identical to math.FMA. The callers pass y (and w) already sliced to
+// len(x).
+func axpyAVX2(alpha float64, x, y []float64)
+func xpbyAVX2(beta float64, x, y []float64)
+func axpyDotAVX2(alpha float64, x, y, w []float64) float64
+func scaleAVX2(alpha float64, x []float64)
+
 // hasAVX2FMA gates the AVX2 path; both AVX2 and FMA3 are required (VFMADD231*).
 // Almost every x86-64 part since Haswell (2013) has both. Without them the
 // kernels would #UD, so the dispatcher falls back to the lane-blocked scalar
@@ -60,4 +68,35 @@ func sumSqDiff32(a, b []float32) float32 {
 		return sumSqDiff32AVX2(a, b)
 	}
 	return sumSqDiffLanes32(a, b)
+}
+
+func axpy(alpha float64, x, y []float64) {
+	if hasAVX2FMA {
+		axpyAVX2(alpha, x, y)
+		return
+	}
+	axpyRef(alpha, x, y)
+}
+
+func xpby(beta float64, x, y []float64) {
+	if hasAVX2FMA {
+		xpbyAVX2(beta, x, y)
+		return
+	}
+	xpbyRef(beta, x, y)
+}
+
+func axpyDot(alpha float64, x, y, w []float64) float64 {
+	if hasAVX2FMA {
+		return axpyDotAVX2(alpha, x, y, w)
+	}
+	return axpyDotRef(alpha, x, y, w)
+}
+
+func scale(alpha float64, x []float64) {
+	if hasAVX2FMA {
+		scaleAVX2(alpha, x)
+		return
+	}
+	scaleRef(alpha, x)
 }

@@ -28,6 +28,8 @@ jobs:
         continue-on-error: true
       - run: go test -run '^$' -fuzz FuzzDistance -fuzztime 3m ./...
         continue-on-error: true
+      - run: go test -run '^$' -fuzz FuzzAxpy -fuzztime 3m ./...
+        continue-on-error: true
       - name: upload any fuzz-discovered corpus
         if: always()
         uses: actions/upload-artifact@v7

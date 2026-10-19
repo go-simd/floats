@@ -57,3 +57,47 @@ func TestDispatchAMD64(t *testing.T) {
 		t.Log("CPU lacks AVX2+FMA; kernel branch not exercised on this host")
 	}
 }
+
+// TestDispatchAMD64Elementwise drives Axpy/Xpby/AxpyDot/Scale down both amd64
+// paths. Both must give the same updated slice bit for bit (math.FMA), which is
+// the architecture-independence contract of the elementwise kernels.
+func TestDispatchAMD64Elementwise(t *testing.T) {
+	saved := hasAVX2FMA
+	defer func() { hasAVX2FMA = saved }()
+
+	rng := rand.New(rand.NewSource(98))
+	check := func(label string) {
+		for _, n := range []int{0, 1, 3, 4, 5, 15, 16, 17, 33, 100, 257, 1024} {
+			x, y0, w := randF64(n, rng), randF64(n, rng), randF64(n, rng)
+			want := append([]float64(nil), y0...)
+			axpyRef(0.3, x, want)
+			y := append([]float64(nil), y0...)
+			axpy(0.3, x, y)
+			checkSame(t, label+" axpy", y, want, n, 0)
+
+			xpbyRef(-1.7, x, want)
+			xpby(-1.7, x, y)
+			checkSame(t, label+" xpby", y, want, n, 0)
+
+			wantDot := axpyDotRef(2.5, x, want, w)
+			got := axpyDot(2.5, x, y, w)
+			checkSame(t, label+" axpyDot", y, want, n, 0)
+			if !closeDot(got, wantDot, absSumProd64(want, w), relTol64) {
+				t.Fatalf("%s axpyDot n=%d: %v != %v", label, n, got, wantDot)
+			}
+
+			scaleRef(-0.1, want)
+			scale(-0.1, y)
+			checkSame(t, label+" scale", y, want, n, 0)
+		}
+	}
+
+	hasAVX2FMA = false
+	check("scalar")
+	if saved {
+		hasAVX2FMA = true
+		check("avx2")
+	} else {
+		t.Log("CPU lacks AVX2+FMA; kernel branch not exercised on this host")
+	}
+}

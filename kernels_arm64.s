@@ -269,3 +269,208 @@ done:
 	FMOVS F0, ret+48(FP)
 	RET
 
+TEXT ·axpyNEON(SB), NOSPLIT, $0-56
+	FMOVD alpha+0(FP), F31
+	VDUP V31.D[0], V31.D2
+	MOVD x_base+8(FP), R0
+	MOVD x_len+16(FP), R1
+	MOVD y_base+32(FP), R2
+	MOVD $0, R3
+uloop:
+	ADD $8, R3, R4
+	CMP R1, R4
+	BGT vloop
+	ADD R3<<3, R0, R5
+	ADD R3<<3, R2, R6
+	VLD1 (R5), [V1.D2, V2.D2, V3.D2, V4.D2]
+	VLD1 (R6), [V5.D2, V6.D2, V7.D2, V8.D2]
+	VFMLA V31.D2, V1.D2, V5.D2
+	VFMLA V31.D2, V2.D2, V6.D2
+	VFMLA V31.D2, V3.D2, V7.D2
+	VFMLA V31.D2, V4.D2, V8.D2
+	VST1 [V5.D2, V6.D2, V7.D2, V8.D2], (R6)
+	ADD $8, R3, R3
+	B uloop
+vloop:
+	ADD $2, R3, R4
+	CMP R1, R4
+	BGT sloop
+	ADD R3<<3, R0, R5
+	VLD1 (R5), [V1.D2]
+	ADD R3<<3, R2, R6
+	VLD1 (R6), [V5.D2]
+	VFMLA V31.D2, V1.D2, V5.D2
+	VST1 [V5.D2], (R6)
+	ADD $2, R3, R3
+	B vloop
+sloop:
+	CMP R1, R3
+	BGE done
+	FMOVD (R0)(R3<<3), F1
+	FMOVD (R2)(R3<<3), F2
+	FMADDD F31, F2, F1, F2
+	FMOVD F2, (R2)(R3<<3)
+	ADD $1, R3, R3
+	B sloop
+done:
+	RET
+
+TEXT ·xpbyNEON(SB), NOSPLIT, $0-56
+	FMOVD beta+0(FP), F31
+	VDUP V31.D[0], V31.D2
+	MOVD x_base+8(FP), R0
+	MOVD x_len+16(FP), R1
+	MOVD y_base+32(FP), R2
+	MOVD $0, R3
+uloop:
+	ADD $8, R3, R4
+	CMP R1, R4
+	BGT vloop
+	ADD R3<<3, R0, R5
+	ADD R3<<3, R2, R6
+	VLD1 (R5), [V1.D2, V2.D2, V3.D2, V4.D2]
+	VLD1 (R6), [V5.D2, V6.D2, V7.D2, V8.D2]
+	VFMLA V31.D2, V5.D2, V1.D2
+	VFMLA V31.D2, V6.D2, V2.D2
+	VFMLA V31.D2, V7.D2, V3.D2
+	VFMLA V31.D2, V8.D2, V4.D2
+	VST1 [V1.D2, V2.D2, V3.D2, V4.D2], (R6)
+	ADD $8, R3, R3
+	B uloop
+vloop:
+	ADD $2, R3, R4
+	CMP R1, R4
+	BGT sloop
+	ADD R3<<3, R0, R5
+	VLD1 (R5), [V1.D2]
+	ADD R3<<3, R2, R6
+	VLD1 (R6), [V5.D2]
+	VFMLA V31.D2, V5.D2, V1.D2
+	VST1 [V1.D2], (R6)
+	ADD $2, R3, R3
+	B vloop
+sloop:
+	CMP R1, R3
+	BGE done
+	FMOVD (R0)(R3<<3), F1
+	FMOVD (R2)(R3<<3), F2
+	FMADDD F31, F1, F2, F1
+	FMOVD F1, (R2)(R3<<3)
+	ADD $1, R3, R3
+	B sloop
+done:
+	RET
+
+TEXT ·axpyDotNEON(SB), NOSPLIT, $0-88
+	FMOVD alpha+0(FP), F31
+	VDUP V31.D[0], V31.D2
+	MOVD x_base+8(FP), R0
+	MOVD x_len+16(FP), R1
+	MOVD y_base+32(FP), R2
+	MOVD w_base+56(FP), R7
+	VEOR V16.B16, V16.B16, V16.B16
+	VEOR V17.B16, V17.B16, V17.B16
+	VEOR V18.B16, V18.B16, V18.B16
+	VEOR V19.B16, V19.B16, V19.B16
+	MOVD $0, R3
+uloop:
+	ADD $8, R3, R4
+	CMP R1, R4
+	BGT vloop
+	ADD R3<<3, R0, R5
+	ADD R3<<3, R2, R6
+	ADD R3<<3, R7, R8
+	VLD1 (R5), [V1.D2, V2.D2, V3.D2, V4.D2]
+	VLD1 (R6), [V5.D2, V6.D2, V7.D2, V8.D2]
+	VFMLA V31.D2, V1.D2, V5.D2
+	VFMLA V31.D2, V2.D2, V6.D2
+	VFMLA V31.D2, V3.D2, V7.D2
+	VFMLA V31.D2, V4.D2, V8.D2
+	VST1 [V5.D2, V6.D2, V7.D2, V8.D2], (R6)
+	VLD1 (R8), [V9.D2, V10.D2, V11.D2, V12.D2]
+	VFMLA V9.D2, V5.D2, V16.D2
+	VFMLA V10.D2, V6.D2, V17.D2
+	VFMLA V11.D2, V7.D2, V18.D2
+	VFMLA V12.D2, V8.D2, V19.D2
+	ADD $8, R3, R3
+	B uloop
+vloop:
+	VFADD V17.D2, V16.D2, V16.D2
+	VFADD V19.D2, V18.D2, V18.D2
+	VFADD V18.D2, V16.D2, V16.D2
+vloop2:
+	ADD $2, R3, R4
+	CMP R1, R4
+	BGT vtail
+	ADD R3<<3, R0, R5
+	VLD1 (R5), [V1.D2]
+	ADD R3<<3, R2, R6
+	VLD1 (R6), [V5.D2]
+	VFMLA V31.D2, V1.D2, V5.D2
+	VST1 [V5.D2], (R6)
+	ADD R3<<3, R7, R8
+	VLD1 (R8), [V9.D2]
+	VFMLA V9.D2, V5.D2, V16.D2
+	ADD $2, R3, R3
+	B vloop2
+vtail:
+	VMOV V16.D[0], R9
+	FMOVD R9, F0
+	VMOV V16.D[1], R9
+	FMOVD R9, F1
+	FADDD F1, F0, F0
+sloop:
+	CMP R1, R3
+	BGE done
+	FMOVD (R0)(R3<<3), F1
+	FMOVD (R2)(R3<<3), F2
+	FMADDD F31, F2, F1, F2
+	FMOVD F2, (R2)(R3<<3)
+	FMOVD (R7)(R3<<3), F3
+	FMADDD F3, F0, F2, F0
+	ADD $1, R3, R3
+	B sloop
+done:
+	FMOVD F0, ret+80(FP)
+	RET
+
+TEXT ·scaleNEON(SB), NOSPLIT, $0-32
+	FMOVD alpha+0(FP), F31
+	VDUP V31.D[0], V31.D2
+	MOVD x_base+8(FP), R0
+	MOVD x_len+16(FP), R1
+	MOVD $0, R3
+uloop:
+	ADD $8, R3, R4
+	CMP R1, R4
+	BGT vloop
+	ADD R3<<3, R0, R5
+	VLD1 (R5), [V1.D2, V2.D2, V3.D2, V4.D2]
+	VFMUL V31.D2, V1.D2, V1.D2
+	VFMUL V31.D2, V2.D2, V2.D2
+	VFMUL V31.D2, V3.D2, V3.D2
+	VFMUL V31.D2, V4.D2, V4.D2
+	VST1 [V1.D2, V2.D2, V3.D2, V4.D2], (R5)
+	ADD $8, R3, R3
+	B uloop
+vloop:
+	ADD $2, R3, R4
+	CMP R1, R4
+	BGT sloop
+	ADD R3<<3, R0, R5
+	VLD1 (R5), [V1.D2]
+	VFMUL V31.D2, V1.D2, V1.D2
+	VST1 [V1.D2], (R5)
+	ADD $2, R3, R3
+	B vloop
+sloop:
+	CMP R1, R3
+	BGE done
+	FMOVD (R0)(R3<<3), F1
+	FMULD F31, F1, F1
+	FMOVD F1, (R0)(R3<<3)
+	ADD $1, R3, R3
+	B sloop
+done:
+	RET
+

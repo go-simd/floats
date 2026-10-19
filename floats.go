@@ -20,6 +20,20 @@
 // Dot, Distance and CosineSimilarity require len(a) == len(b) and panic
 // otherwise. Min and Max panic on an empty slice. Sum of an empty slice is 0.
 //
+// For []float64, the in-place elementwise updates (BLAS level 1) behind
+// iterative solvers, QR and LU:
+//
+//	Axpy(α, x, y)          yᵢ = fma(α, xᵢ, yᵢ)          (y += αx)
+//	Xpby(x, β, y)          yᵢ = fma(β, yᵢ, xᵢ)          (y = x + βy)
+//	AxpyDot(α, x, y, w)    y += αx, then returns Σ yᵢwᵢ  (one pass)
+//	Scale(α, x)            xᵢ = α·xᵢ
+//
+// They operate on the first len(x) elements and panic if y (or w) is shorter.
+// Unlike the reductions, the updated slices are bit-identical on every
+// architecture: each element is rounded once, exactly as math.FMA rounds it
+// (AVX2 FMA on amd64, NEON FMLA on arm64, the math.FMA loop elsewhere). Only
+// AxpyDot's returned sum is a reduction and follows the rules below.
+//
 // # Floating-point determinism
 //
 // A SIMD reduction does not add its terms left-to-right: it keeps several

@@ -91,3 +91,55 @@ func FuzzDistance(f *testing.F) {
 		}
 	})
 }
+
+// rawF64 decodes the fuzz input into float64s WITHOUT filtering: NaN, ±Inf,
+// subnormals and huge values all stay, because the elementwise kernels promise
+// bit identity with math.FMA for every input, not just finite ones.
+func rawF64(data []byte) []float64 {
+	out := make([]float64, len(data)/8)
+	for i := range out {
+		out[i] = math.Float64frombits(binary.LittleEndian.Uint64(data[i*8:]))
+	}
+	return out
+}
+
+// FuzzAxpy checks Axpy, Xpby, Scale and AxpyDot against the math.FMA reference
+// bit for bit (the updated slice) and within the reduction tolerance (the
+// AxpyDot sum, when finite). The scalar and the start offset come from the
+// input too, so lengths, alignments and IEEE specials are all explored.
+func FuzzAxpy(f *testing.F) {
+	f.Add(uint64(0x3ff8000000000000), uint8(0), []byte{1, 2, 3, 4, 5, 6, 7, 8})
+	f.Add(uint64(0x7ff8000000000001), uint8(1), make([]byte, 8*40))
+	f.Add(uint64(0xbfe0000000000000), uint8(3), make([]byte, 8*61))
+	f.Fuzz(func(t *testing.T, alphaBits uint64, offset uint8, data []byte) {
+		alpha := math.Float64frombits(alphaBits)
+		v := rawF64(data)
+		off := int(offset % 4)
+		if off > len(v) {
+			off = len(v)
+		}
+		v = v[off:]
+		n := len(v) / 3
+		x, y0, w := v[:n], v[n:2*n], v[2*n:3*n]
+
+		y, want := append([]float64(nil), y0...), append([]float64(nil), y0...)
+		Axpy(alpha, x, y)
+		axpyRef(alpha, x, want)
+		checkSame(t, "FuzzAxpy Axpy", y, want, n, off)
+
+		Xpby(x, alpha, y)
+		xpbyRef(alpha, x, want)
+		checkSame(t, "FuzzAxpy Xpby", y, want, n, off)
+
+		Scale(alpha, y)
+		scaleRef(alpha, want)
+		checkSame(t, "FuzzAxpy Scale", y, want, n, off)
+
+		got := AxpyDot(alpha, x, y, w)
+		wantDot := axpyDotRef(alpha, x, want, w)
+		checkSame(t, "FuzzAxpy AxpyDot", y, want, n, off)
+		if mag := absSumProd64(want, w); !math.IsInf(mag, 0) && !math.IsNaN(mag) && !closeDot(got, wantDot, mag, 1e-9) {
+			t.Errorf("AxpyDot sum: got %v want %v (n=%d)", got, wantDot, n)
+		}
+	})
+}
