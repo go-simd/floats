@@ -1,7 +1,9 @@
 //go:build ignore
 
 // Command gen produces kernels_arm64.s with go-asmgen: NEON FMA reduction
-// kernels for the float32/float64 dot product, sum and sum-of-squared-diffs.
+// kernels for the float32/float64 dot product, sum and sum-of-squared-diffs,
+// plus the float64 elementwise updates Axpy, Xpby, AxpyDot and Scale (see the
+// section at the end of this file).
 //
 // The bulk loops fold with VFMLA (acc += a*b lane-wise). The sum kernels
 // accumulate against a broadcast 1.0 vector (acc += a*1, which rounds exactly
@@ -46,6 +48,30 @@ func sumSig(elem abi.Type) abi.Signature {
 	)
 }
 
+// axpySig is func(<scalar> float64, x, y []float64).
+func axpySig(scalar string) abi.Signature {
+	return abi.LayoutArgs(
+		[]abi.Arg{abi.Scalar(scalar, abi.Float64), abi.Slice("x"), abi.Slice("y")},
+		nil,
+	)
+}
+
+// axpyDotSig is func(alpha float64, x, y, w []float64) float64.
+func axpyDotSig() abi.Signature {
+	return abi.LayoutArgs(
+		[]abi.Arg{abi.Scalar("alpha", abi.Float64), abi.Slice("x"), abi.Slice("y"), abi.Slice("w")},
+		[]abi.Arg{abi.Scalar("ret", abi.Float64)},
+	)
+}
+
+// scaleSig is func(alpha float64, x []float64).
+func scaleSig() abi.Signature {
+	return abi.LayoutArgs(
+		[]abi.Arg{abi.Scalar("alpha", abi.Float64), abi.Slice("x")},
+		nil,
+	)
+}
+
 func main() {
 	f := emit.NewFile("arm64")
 	f.Add(dotF64().Func())
@@ -54,6 +80,10 @@ func main() {
 	f.Add(dotF32().Func())
 	f.Add(sumF32().Func())
 	f.Add(ssdF32().Func())
+	f.Add(axpyF64().Func())
+	f.Add(xpbyF64().Func())
+	f.Add(axpyDotF64().Func())
+	f.Add(scaleF64().Func())
 	if err := os.WriteFile("kernels_arm64.s", []byte(f.String()), 0o644); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -287,5 +317,189 @@ func ssdF32() *arm64.Builder {
 		Raw("FMADDS F1, F0, F1, F0").
 		Raw("ADD $1, R3, R3").Raw("B sloop").
 		Label("done").StoreRet("F0", "ret").Ret()
+	return b
+}
+
+// ---- float64 elementwise update kernels (BLAS level 1) ----
+//
+// Register plan: V31.D2 = the broadcast scalar (F31 keeps it for the scalar
+// tail), R0 = x, R1 = n, R2 = y, R7 = w, R3 = i, R5/R6/R8 = element addresses.
+//
+// Every element is ONE fused multiply-add (VFMLA lane-wise, FMADDD in the
+// tail), so each result is bit-identical to math.FMA(alpha, x[i], y[i]) (or
+// math.FMA(beta, y[i], x[i]) for Xpby). The bulk loop is unrolled ×4: one
+// four-register VLD1/VST1 moves 8 elements per array per iteration. A 2-wide
+// loop and a scalar tail finish the remainder. Every access is at an index < n:
+// the unrolled loop runs only while i+8 <= n, the 2-wide one while i+2 <= n, the
+// tail is scalar — so no kernel touches memory past the end of a slice.
+//
+// Operand orders: `VFMLA Vm, Vn, Vd` is Vd += Vn*Vm; `FMADDD Fm, Fa, Fn, Fd` is
+// Fd = Fn*Fm + Fa; `VFMUL Vm, Vn, Vd` is Vd = Vn*Vm.
+
+const (
+	xs = "[V1.D2, V2.D2, V3.D2, V4.D2]"
+	ys = "[V5.D2, V6.D2, V7.D2, V8.D2]"
+	ws = "[V9.D2, V10.D2, V11.D2, V12.D2]"
+)
+
+func loadScalar(b *arm64.Builder, name string) {
+	b.LoadArg(name, "F31").Raw("VDUP V31.D[0], V31.D2")
+}
+
+// axpyF64: y[i] = fma(alpha, x[i], y[i]).
+func axpyF64() *arm64.Builder {
+	b := arm64.NewFunc("axpyNEON", axpySig("alpha"), 0)
+	loadScalar(b, "alpha")
+	b.LoadArg("x_base", "R0").LoadArg("x_len", "R1").LoadArg("y_base", "R2").
+		Raw("MOVD $0, R3").
+		Label("uloop").
+		Raw("ADD $8, R3, R4").Raw("CMP R1, R4").Raw("BGT vloop").
+		Raw("ADD R3<<3, R0, R5").Raw("ADD R3<<3, R2, R6").
+		Raw("VLD1 (R5), " + xs).
+		Raw("VLD1 (R6), " + ys)
+	for k := 0; k < 4; k++ {
+		b.Raw(fmt.Sprintf("VFMLA V31.D2, V%d.D2, V%d.D2", 1+k, 5+k)) // y += x*alpha
+	}
+	b.Raw("VST1 " + ys + ", (R6)").
+		Raw("ADD $8, R3, R3").Raw("B uloop").
+		Label("vloop").
+		Raw("ADD $2, R3, R4").Raw("CMP R1, R4").Raw("BGT sloop").
+		Raw("ADD R3<<3, R0, R5").Raw("VLD1 (R5), [V1.D2]").
+		Raw("ADD R3<<3, R2, R6").Raw("VLD1 (R6), [V5.D2]").
+		Raw("VFMLA V31.D2, V1.D2, V5.D2").
+		Raw("VST1 [V5.D2], (R6)").
+		Raw("ADD $2, R3, R3").Raw("B vloop").
+		Label("sloop").
+		Raw("CMP R1, R3").Raw("BGE done").
+		Raw("FMOVD (R0)(R3<<3), F1").
+		Raw("FMOVD (R2)(R3<<3), F2").
+		Raw("FMADDD F31, F2, F1, F2"). // F2 = x*alpha + y
+		Raw("FMOVD F2, (R2)(R3<<3)").
+		Raw("ADD $1, R3, R3").Raw("B sloop").
+		Label("done").Ret()
+	return b
+}
+
+// xpbyF64: y[i] = fma(beta, y[i], x[i]). x is the addend, so the result forms
+// in the x registers and is stored to y.
+func xpbyF64() *arm64.Builder {
+	b := arm64.NewFunc("xpbyNEON", axpySig("beta"), 0)
+	loadScalar(b, "beta")
+	b.LoadArg("x_base", "R0").LoadArg("x_len", "R1").LoadArg("y_base", "R2").
+		Raw("MOVD $0, R3").
+		Label("uloop").
+		Raw("ADD $8, R3, R4").Raw("CMP R1, R4").Raw("BGT vloop").
+		Raw("ADD R3<<3, R0, R5").Raw("ADD R3<<3, R2, R6").
+		Raw("VLD1 (R5), " + xs).
+		Raw("VLD1 (R6), " + ys)
+	for k := 0; k < 4; k++ {
+		b.Raw(fmt.Sprintf("VFMLA V31.D2, V%d.D2, V%d.D2", 5+k, 1+k)) // x += y*beta
+	}
+	b.Raw("VST1 " + xs + ", (R6)").
+		Raw("ADD $8, R3, R3").Raw("B uloop").
+		Label("vloop").
+		Raw("ADD $2, R3, R4").Raw("CMP R1, R4").Raw("BGT sloop").
+		Raw("ADD R3<<3, R0, R5").Raw("VLD1 (R5), [V1.D2]").
+		Raw("ADD R3<<3, R2, R6").Raw("VLD1 (R6), [V5.D2]").
+		Raw("VFMLA V31.D2, V5.D2, V1.D2").
+		Raw("VST1 [V1.D2], (R6)").
+		Raw("ADD $2, R3, R3").Raw("B vloop").
+		Label("sloop").
+		Raw("CMP R1, R3").Raw("BGE done").
+		Raw("FMOVD (R0)(R3<<3), F1").
+		Raw("FMOVD (R2)(R3<<3), F2").
+		Raw("FMADDD F31, F1, F2, F1"). // F1 = y*beta + x
+		Raw("FMOVD F1, (R2)(R3<<3)").
+		Raw("ADD $1, R3, R3").Raw("B sloop").
+		Label("done").Ret()
+	return b
+}
+
+// axpyDotF64: y[i] = fma(alpha, x[i], y[i]); returns Σ y[i]*w[i] over the
+// updated y in the same pass. Four D2 accumulators (V16..V19, one per unrolled
+// register) are summed pairwise with VFADD, the 2-wide loop extends V16, its two
+// lanes are folded through GPRs (as foldD2 does) and the scalar tail finishes.
+func axpyDotF64() *arm64.Builder {
+	b := arm64.NewFunc("axpyDotNEON", axpyDotSig(), 0)
+	loadScalar(b, "alpha")
+	b.LoadArg("x_base", "R0").LoadArg("x_len", "R1").LoadArg("y_base", "R2").LoadArg("w_base", "R7").
+		Raw("VEOR V16.B16, V16.B16, V16.B16").
+		Raw("VEOR V17.B16, V17.B16, V17.B16").
+		Raw("VEOR V18.B16, V18.B16, V18.B16").
+		Raw("VEOR V19.B16, V19.B16, V19.B16").
+		Raw("MOVD $0, R3").
+		Label("uloop").
+		Raw("ADD $8, R3, R4").Raw("CMP R1, R4").Raw("BGT vloop").
+		Raw("ADD R3<<3, R0, R5").Raw("ADD R3<<3, R2, R6").Raw("ADD R3<<3, R7, R8").
+		Raw("VLD1 (R5), " + xs).
+		Raw("VLD1 (R6), " + ys)
+	for k := 0; k < 4; k++ {
+		b.Raw(fmt.Sprintf("VFMLA V31.D2, V%d.D2, V%d.D2", 1+k, 5+k)) // y += x*alpha
+	}
+	// w is loaded only after y is stored, so w may alias y (r·r in CG).
+	b.Raw("VST1 " + ys + ", (R6)").
+		Raw("VLD1 (R8), " + ws)
+	for k := 0; k < 4; k++ {
+		b.Raw(fmt.Sprintf("VFMLA V%d.D2, V%d.D2, V%d.D2", 9+k, 5+k, 16+k)) // acc += y*w
+	}
+	b.Raw("ADD $8, R3, R3").Raw("B uloop").
+		Label("vloop").
+		Raw("VFADD V17.D2, V16.D2, V16.D2").
+		Raw("VFADD V19.D2, V18.D2, V18.D2").
+		Raw("VFADD V18.D2, V16.D2, V16.D2").
+		Label("vloop2").
+		Raw("ADD $2, R3, R4").Raw("CMP R1, R4").Raw("BGT vtail").
+		Raw("ADD R3<<3, R0, R5").Raw("VLD1 (R5), [V1.D2]").
+		Raw("ADD R3<<3, R2, R6").Raw("VLD1 (R6), [V5.D2]").
+		Raw("VFMLA V31.D2, V1.D2, V5.D2").
+		Raw("VST1 [V5.D2], (R6)").
+		Raw("ADD R3<<3, R7, R8").Raw("VLD1 (R8), [V9.D2]").
+		Raw("VFMLA V9.D2, V5.D2, V16.D2").
+		Raw("ADD $2, R3, R3").Raw("B vloop2").
+		Label("vtail").
+		Raw("VMOV V16.D[0], R9").Raw("FMOVD R9, F0").
+		Raw("VMOV V16.D[1], R9").Raw("FMOVD R9, F1").
+		Raw("FADDD F1, F0, F0").
+		Label("sloop").
+		Raw("CMP R1, R3").Raw("BGE done").
+		Raw("FMOVD (R0)(R3<<3), F1").
+		Raw("FMOVD (R2)(R3<<3), F2").
+		Raw("FMADDD F31, F2, F1, F2"). // y = x*alpha + y
+		Raw("FMOVD F2, (R2)(R3<<3)").
+		Raw("FMOVD (R7)(R3<<3), F3"). // after the store: w may alias y
+		Raw("FMADDD F3, F0, F2, F0"). // acc += y*w
+		Raw("ADD $1, R3, R3").Raw("B sloop").
+		Label("done").StoreRet("F0", "ret").Ret()
+	return b
+}
+
+// scaleF64: x[i] *= alpha (one rounding, like the scalar multiply).
+func scaleF64() *arm64.Builder {
+	b := arm64.NewFunc("scaleNEON", scaleSig(), 0)
+	loadScalar(b, "alpha")
+	b.LoadArg("x_base", "R0").LoadArg("x_len", "R1").
+		Raw("MOVD $0, R3").
+		Label("uloop").
+		Raw("ADD $8, R3, R4").Raw("CMP R1, R4").Raw("BGT vloop").
+		Raw("ADD R3<<3, R0, R5").
+		Raw("VLD1 (R5), " + xs)
+	for k := 0; k < 4; k++ {
+		b.Raw(fmt.Sprintf("VFMUL V31.D2, V%d.D2, V%d.D2", 1+k, 1+k))
+	}
+	b.Raw("VST1 " + xs + ", (R5)").
+		Raw("ADD $8, R3, R3").Raw("B uloop").
+		Label("vloop").
+		Raw("ADD $2, R3, R4").Raw("CMP R1, R4").Raw("BGT sloop").
+		Raw("ADD R3<<3, R0, R5").Raw("VLD1 (R5), [V1.D2]").
+		Raw("VFMUL V31.D2, V1.D2, V1.D2").
+		Raw("VST1 [V1.D2], (R5)").
+		Raw("ADD $2, R3, R3").Raw("B vloop").
+		Label("sloop").
+		Raw("CMP R1, R3").Raw("BGE done").
+		Raw("FMOVD (R0)(R3<<3), F1").
+		Raw("FMULD F31, F1, F1").
+		Raw("FMOVD F1, (R0)(R3<<3)").
+		Raw("ADD $1, R3, R3").Raw("B sloop").
+		Label("done").Ret()
 	return b
 }

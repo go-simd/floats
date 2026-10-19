@@ -19,3 +19,16 @@ func sumSqDiff(a, b []float64) float64 { return sumSqDiffNEON(a, b) }
 func dot32(a, b []float32) float32       { return dot32NEON(a, b) }
 func sum32(a []float32) float32          { return sum32NEON(a) }
 func sumSqDiff32(a, b []float32) float32 { return sumSqDiff32NEON(a, b) }
+
+// Elementwise float64 updates (kernels_arm64_gen.go): one VFMLA/FMADDD per
+// element, bit-identical to math.FMA. The callers pass y (and w) already sliced
+// to len(x).
+func axpyNEON(alpha float64, x, y []float64)
+func xpbyNEON(beta float64, x, y []float64)
+func axpyDotNEON(alpha float64, x, y, w []float64) float64
+func scaleNEON(alpha float64, x []float64)
+
+func axpy(alpha float64, x, y []float64)               { axpyNEON(alpha, x, y) }
+func xpby(beta float64, x, y []float64)                { xpbyNEON(beta, x, y) }
+func axpyDot(alpha float64, x, y, w []float64) float64 { return axpyDotNEON(alpha, x, y, w) }
+func scale(alpha float64, x []float64)                 { scaleNEON(alpha, x) }
