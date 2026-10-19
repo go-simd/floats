@@ -4,6 +4,7 @@ package floats
 
 import (
 	"math"
+	"runtime/debug"
 	"testing"
 	"unsafe"
 
@@ -28,7 +29,29 @@ func guardedPage(t *testing.T) []float64 {
 	if err := unix.Mprotect(mem[2*ps:], unix.PROT_NONE); err != nil {
 		t.Skipf("mprotect: %v", err)
 	}
-	return unsafe.Slice((*float64)(unsafe.Pointer(&mem[ps])), ps/8)
+	page := unsafe.Slice((*float64)(unsafe.Pointer(&mem[ps])), ps/8)
+	// Planted positive: one element either side of the page must fault, or
+	// the test below could not see an out-of-bounds access at all.
+	before := (*float64)(unsafe.Add(unsafe.Pointer(&page[0]), -8))
+	after := (*float64)(unsafe.Add(unsafe.Pointer(&page[len(page)-1]), 8))
+	if !faults(before) || !faults(after) {
+		t.Fatal("guard pages do not fault; the out-of-bounds check would be blind")
+	}
+	return page
+}
+
+var guardSink float64
+
+// faults reports whether loading *p raises a memory fault.
+func faults(p *float64) (faulted bool) {
+	defer debug.SetPanicOnFault(debug.SetPanicOnFault(true))
+	defer func() {
+		if recover() != nil {
+			faulted = true
+		}
+	}()
+	guardSink = *p
+	return false
 }
 
 // TestAxpyGuardPages runs every elementwise kernel on slices that end exactly
