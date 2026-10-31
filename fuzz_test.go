@@ -103,6 +103,61 @@ func rawF64(data []byte) []float64 {
 	return out
 }
 
+// FuzzElem checks Mul, Axpby3, Clamp and MaxAbs against their definitions bit
+// for bit (NaN payloads of arithmetic results aside) on arbitrary bit patterns:
+// every NaN kind, infinities, subnormals, signed zeros, in crossed and
+// uncrossed bounds, at four start offsets.
+func FuzzElem(f *testing.F) {
+	f.Add(uint64(0x3ff8000000000000), uint8(0), []byte{1, 2, 3, 4, 5, 6, 7, 8})
+	f.Add(uint64(0xfff8000000000123), uint8(1), make([]byte, 8*45))
+	f.Add(uint64(0x8000000000000000), uint8(3), make([]byte, 8*70))
+	f.Fuzz(func(t *testing.T, scalarBits uint64, offset uint8, data []byte) {
+		s := math.Float64frombits(scalarBits)
+		v := rawF64(data)
+		off := int(offset % 4)
+		if off > len(v) {
+			off = len(v)
+		}
+		v = v[off:]
+		n := len(v) / 4
+		a, b, c, d := v[:n], v[n:2*n], v[2*n:3*n], v[3*n:4*n]
+		got, want := make([]float64, n), make([]float64, n)
+
+		Mul(got, a, b)
+		for i := range want {
+			want[i] = a[i] * b[i]
+		}
+		checkSame(t, "FuzzElem Mul", got, want, n, off)
+
+		Axpby3(got, s, a, 0.5, b, -s, c)
+		for i := range want {
+			want[i] = math.FMA(-s, c[i], math.FMA(0.5, b[i], s*a[i]))
+		}
+		checkSame(t, "FuzzElem Axpby3", got, want, n, off)
+
+		Clamp(got, a, b, c)
+		for i := range want {
+			r := a[i]
+			if b[i] > r {
+				r = b[i]
+			}
+			if c[i] < r {
+				r = c[i]
+			}
+			want[i] = r
+		}
+		exactBits(t, "FuzzElem Clamp", got, want, n, off)
+
+		Clamp(got, d, c, b) // swapped bounds: often crossed
+		clampRef(want, d, c, b)
+		exactBits(t, "FuzzElem Clamp swapped", got, want, n, off)
+
+		if g, w := MaxAbs(a), naiveMaxAbs(a); !sameBits(g, w) {
+			t.Errorf("MaxAbs: got %v want %v (n=%d)", g, w, n)
+		}
+	})
+}
+
 // FuzzAxpy checks Axpy, Xpby, Scale and AxpyDot against the math.FMA reference
 // bit for bit (the updated slice) and within the reduction tolerance (the
 // AxpyDot sum, when finite). The scalar and the start offset come from the

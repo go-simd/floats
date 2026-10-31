@@ -101,3 +101,45 @@ func TestDispatchAMD64Elementwise(t *testing.T) {
 		t.Log("CPU lacks AVX2+FMA; kernel branch not exercised on this host")
 	}
 }
+
+// TestDispatchAMD64Elem drives Mul/Axpby3/Clamp/MaxAbs down both amd64 paths;
+// the results must be identical bit for bit (NaN payloads of arithmetic results
+// aside), which is the architecture-independence contract of elem.go.
+func TestDispatchAMD64Elem(t *testing.T) {
+	saved := hasAVX2FMA
+	defer func() { hasAVX2FMA = saved }()
+
+	rng := rand.New(rand.NewSource(97))
+	check := func(label string) {
+		for _, n := range []int{0, 1, 3, 4, 5, 15, 16, 17, 33, 100, 257} {
+			a, b, c := randF64(n, rng), randF64(n, rng), randF64(n, rng)
+			lo, hi := randF64(n, rng), randF64(n, rng)
+			got, want := make([]float64, n), make([]float64, n)
+
+			mulRef(want, a, b)
+			mul(got, a, b)
+			checkSame(t, label+" mul", got, want, n, 0)
+
+			axpby3Ref(want, 0.3, a, -1.7, b, 2.1, c)
+			axpby3(got, 0.3, a, -1.7, b, 2.1, c)
+			checkSame(t, label+" axpby3", got, want, n, 0)
+
+			clampRef(want, a, lo, hi)
+			clamp(got, a, lo, hi)
+			exactBits(t, label+" clamp", got, want, n, 0)
+
+			if g, w := maxAbs(a), maxAbsRef(a); g != w {
+				t.Fatalf("%s maxAbs n=%d: %v != %v", label, n, g, w)
+			}
+		}
+	}
+
+	hasAVX2FMA = false
+	check("scalar")
+	if saved {
+		hasAVX2FMA = true
+		check("avx2")
+	} else {
+		t.Log("CPU lacks AVX2+FMA; kernel branch not exercised on this host")
+	}
+}

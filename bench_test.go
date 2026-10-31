@@ -2,6 +2,7 @@ package floats
 
 import (
 	"fmt"
+	"math"
 	"math/rand"
 	"testing"
 )
@@ -154,6 +155,125 @@ func BenchmarkScale(b *testing.B) {
 	benchElem(b, 2,
 		func(x, _, _ []float64, a float64) { Scale(1+a, x) },
 		func(x, _, _ []float64, a float64) { naiveScale(1+a, x) })
+}
+
+// ---- Mul, Axpby3, Clamp, MaxAbs vs the loops callers write by hand ----
+
+func naiveMul(dst, a, b []float64) {
+	for i, v := range a {
+		dst[i] = v * b[i]
+	}
+}
+
+func naiveAxpby3(dst []float64, al float64, a []float64, be float64, b []float64, ga float64, c []float64) {
+	for i, v := range a {
+		dst[i] = al*v + be*b[i] + ga*c[i]
+	}
+}
+
+func naiveClamp(dst, v, lo, hi []float64) {
+	for i, x := range v {
+		dst[i] = math.Min(math.Max(x, lo[i]), hi[i])
+	}
+}
+
+// naiveClampCmp is the same projection with comparisons (the form Clamp pins).
+func naiveClampCmp(dst, v, lo, hi []float64) {
+	for i, x := range v {
+		if lo[i] > x {
+			x = lo[i]
+		}
+		if hi[i] < x {
+			x = hi[i]
+		}
+		dst[i] = x
+	}
+}
+
+func naiveMaxAbsLoop(v []float64) float64 {
+	m := 0.0
+	for _, x := range v {
+		if a := math.Abs(x); a > m || a != a {
+			m = a
+		}
+	}
+	return m
+}
+
+// benchRun runs f (simd) and g (naive) at the elemSizes with b.SetBytes(n*8*arrays).
+func benchRun(b *testing.B, arrays int, f, g func(n int) func()) {
+	for _, n := range elemSizes() {
+		for _, c := range []struct {
+			name string
+			mk   func(n int) func()
+		}{{"simd", f}, {"naive", g}} {
+			run := c.mk(n)
+			b.Run(fmt.Sprintf("%d/%s", n, c.name), func(b *testing.B) {
+				b.SetBytes(int64(n * 8 * arrays))
+				for i := 0; i < b.N; i++ {
+					run()
+				}
+			})
+		}
+	}
+}
+
+func benchData(n int, k int) [][]float64 {
+	rng := rand.New(rand.NewSource(7))
+	out := make([][]float64, k)
+	for i := range out {
+		out[i] = randF64(n, rng)
+	}
+	return out
+}
+
+func BenchmarkMul(b *testing.B) {
+	mk := func(f func(d, a, b []float64)) func(n int) func() {
+		return func(n int) func() {
+			d := benchData(n, 3)
+			return func() { f(d[0], d[1], d[2]) }
+		}
+	}
+	benchRun(b, 3, mk(Mul), mk(naiveMul))
+}
+
+func BenchmarkAxpby3(b *testing.B) {
+	mk := func(f func(d []float64, al float64, a []float64, be float64, b []float64, ga float64, c []float64)) func(n int) func() {
+		return func(n int) func() {
+			d := benchData(n, 4)
+			return func() { f(d[0], 0.5, d[1], -1.5, d[2], 2.5, d[3]) }
+		}
+	}
+	benchRun(b, 4, mk(Axpby3), mk(naiveAxpby3))
+}
+
+func benchClamp(b *testing.B, naive func(d, v, lo, hi []float64)) {
+	mk := func(f func(d, v, lo, hi []float64)) func(n int) func() {
+		return func(n int) func() {
+			d := benchData(n, 4)
+			for i := range d[2] { // a proper box: lo < hi
+				d[2][i], d[3][i] = -math.Abs(d[2][i]), math.Abs(d[3][i])
+			}
+			return func() { f(d[0], d[1], d[2], d[3]) }
+		}
+	}
+	benchRun(b, 4, mk(Clamp), mk(naive))
+}
+
+// BenchmarkClamp compares against the math.Min/math.Max form (NaN-propagating,
+// signed-zero aware: the form people write) and BenchmarkClampCmp against the
+// comparison form (same semantics as Clamp).
+func BenchmarkClamp(b *testing.B)    { benchClamp(b, naiveClamp) }
+func BenchmarkClampCmp(b *testing.B) { benchClamp(b, naiveClampCmp) }
+
+func BenchmarkMaxAbs(b *testing.B) {
+	mk := func(f func(v []float64) float64) func(n int) func() {
+		return func(n int) func() {
+			d := benchData(n, 1)
+			return func() { sink = f(d[0]) }
+		}
+	}
+	benchRun(b, 1, mk(MaxAbs), mk(naiveMaxAbsLoop))
 }
 
 func sizeName(n int) string {

@@ -84,6 +84,10 @@ func main() {
 	f.Add(xpbyF64().Func())
 	f.Add(axpyDotF64().Func())
 	f.Add(scaleF64().Func())
+	f.Add(mulF64().Func())
+	f.Add(axpby3F64().Func())
+	f.Add(clampF64().Func())
+	f.Add(maxAbsF64().Func())
 	if err := os.WriteFile("kernels_arm64.s", []byte(f.String()), 0o644); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -501,5 +505,178 @@ func scaleF64() *arm64.Builder {
 		Raw("FMOVD F1, (R0)(R3<<3)").
 		Raw("ADD $1, R3, R3").Raw("B sloop").
 		Label("done").Ret()
+	return b
+}
+
+// ---- Mul, Axpby3, Clamp, MaxAbs ----
+//
+// One loop skeleton (neonElem) for the three-operand kernels: input j is loaded
+// into V(1+4j)..V(4+4j) (four registers per iteration, 8 elements per array), the
+// result forms in input 0's registers and is stored to dst; a 2-wide loop (one
+// register) and a 1-element loop finish the remainder. The 1-element loop loads
+// and stores D1 (one double; the load zeroes the upper half of the register), so
+// the same vector instructions serve every stage and no scalar FP code exists to
+// diverge from them. Every access is at an index < n; every block is loaded,
+// computed and stored before the next, so dst may be the same slice as any input.
+//
+// Registers: R0/R7/R12 = input 0/1/2, R2 = dst, R1 = n, R3 = i, R4 = bound
+// check, R5/R8/R10 = input addresses, R6 = dst address; V29..V31 = broadcast
+// scalars, V16.. = masks.
+
+var neonStages = []struct {
+	label, next string
+	elems, regs int
+	arr         string
+}{
+	{"uloop", "vloop", 8, 4, "D2"},
+	{"vloop", "sloop", 2, 1, "D2"},
+	{"sloop", "done", 1, 1, "D1"},
+}
+
+func vregs(first, n int, arr string) string {
+	s := "["
+	for k := 0; k < n; k++ {
+		if k > 0 {
+			s += ", "
+		}
+		s += fmt.Sprintf("V%d.%s", first+k, arr)
+	}
+	return s + "]"
+}
+
+// neonElem emits the loop: len(ptrs) inputs, compute(k) turns register k of
+// input 0 into the result.
+func neonElem(b *arm64.Builder, ptrs []string, compute func(k int)) {
+	addr := []string{"R5", "R8", "R10"}
+	b.Raw("MOVD $0, R3")
+	for _, s := range neonStages {
+		b.Label(s.label).
+			Raw(fmt.Sprintf("ADD $%d, R3, R4", s.elems)).Raw("CMP R1, R4").Raw("BGT " + s.next)
+		for j, p := range ptrs {
+			b.Raw(fmt.Sprintf("ADD R3<<3, %s, %s", p, addr[j])).
+				Raw(fmt.Sprintf("VLD1 (%s), %s", addr[j], vregs(1+4*j, s.regs, s.arr)))
+		}
+		for k := 0; k < s.regs; k++ {
+			compute(k)
+		}
+		b.Raw("ADD R3<<3, R2, R6").
+			Raw(fmt.Sprintf("VST1 %s, (R6)", vregs(1, s.regs, s.arr))).
+			Raw(fmt.Sprintf("ADD $%d, R3, R3", s.elems)).Raw("B " + s.label)
+	}
+	b.Label("done").Ret()
+}
+
+// mulSig is func(dst, a, b []float64).
+func mulSig() abi.Signature {
+	return abi.LayoutArgs(
+		[]abi.Arg{abi.Slice("dst"), abi.Slice("a"), abi.Slice("b")}, nil)
+}
+
+// mulF64: dst[i] = a[i]*b[i] (VFMUL: one IEEE rounding).
+func mulF64() *arm64.Builder {
+	b := arm64.NewFunc("mulNEON", mulSig(), 0)
+	b.LoadArg("dst_base", "R2").LoadArg("a_base", "R0").LoadArg("a_len", "R1").LoadArg("b_base", "R7")
+	neonElem(b, []string{"R0", "R7"}, func(k int) {
+		b.Raw(fmt.Sprintf("VFMUL V%d.D2, V%d.D2, V%d.D2", 5+k, 1+k, 1+k))
+	})
+	return b
+}
+
+// axpby3Sig is func(dst []float64, alpha float64, a []float64, beta float64,
+// b []float64, gamma float64, c []float64).
+func axpby3Sig() abi.Signature {
+	return abi.LayoutArgs(
+		[]abi.Arg{abi.Slice("dst"), abi.Scalar("alpha", abi.Float64), abi.Slice("a"),
+			abi.Scalar("beta", abi.Float64), abi.Slice("b"),
+			abi.Scalar("gamma", abi.Float64), abi.Slice("c")}, nil)
+}
+
+// axpby3F64: dst[i] = fma(gamma, c[i], fma(beta, b[i], alpha*a[i])): a plain
+// VFMUL, then two VFMLA (Vd += Vn*Vm), bit-identical to the math.FMA chain.
+func axpby3F64() *arm64.Builder {
+	b := arm64.NewFunc("axpby3NEON", axpby3Sig(), 0)
+	b.LoadArg("alpha", "F29").Raw("VDUP V29.D[0], V29.D2").
+		LoadArg("beta", "F30").Raw("VDUP V30.D[0], V30.D2").
+		LoadArg("gamma", "F31").Raw("VDUP V31.D[0], V31.D2").
+		LoadArg("dst_base", "R2").LoadArg("a_base", "R0").LoadArg("a_len", "R1").
+		LoadArg("b_base", "R7").LoadArg("c_base", "R12")
+	neonElem(b, []string{"R0", "R7", "R12"}, func(k int) {
+		b.Raw(fmt.Sprintf("VFMUL V29.D2, V%d.D2, V%d.D2", 1+k, 1+k)).
+			Raw(fmt.Sprintf("VFMLA V30.D2, V%d.D2, V%d.D2", 5+k, 1+k)).
+			Raw(fmt.Sprintf("VFMLA V31.D2, V%d.D2, V%d.D2", 9+k, 1+k))
+	})
+	return b
+}
+
+// clampSig is func(dst, v, lo, hi []float64).
+func clampSig() abi.Signature {
+	return abi.LayoutArgs(
+		[]abi.Arg{abi.Slice("dst"), abi.Slice("v"), abi.Slice("lo"), abi.Slice("hi")}, nil)
+}
+
+// clampF64: r = v; r = lo where lo > v; r = hi where r > hi. FMAX/FMIN would
+// propagate a NaN bound and order the signed zeros, which is not the contract,
+// so the strict compares are done with FCMGT (false when unordered, false on
+// equal zeros) and the select with BIT. `VFCMGT Vm, Vn, Vd` is Vd = Vn > Vm
+// (all ones where true); `VBIT Vm, Vn, Vd` copies Vn's bits into Vd where Vm
+// is set.
+func clampF64() *arm64.Builder {
+	b := arm64.NewFunc("clampNEON", clampSig(), 0)
+	b.LoadArg("dst_base", "R2").LoadArg("v_base", "R0").LoadArg("v_len", "R1").
+		LoadArg("lo_base", "R7").LoadArg("hi_base", "R12")
+	neonElem(b, []string{"R0", "R7", "R12"}, func(k int) {
+		v, lo, hi, m := 1+k, 5+k, 9+k, 16+k
+		b.Raw(fmt.Sprintf("VFCMGT V%d.D2, V%d.D2, V%d.D2", v, lo, m)). // m = lo > v
+										Raw(fmt.Sprintf("VBIT V%d.B16, V%d.B16, V%d.B16", m, lo, v)). // v = lo where m
+										Raw(fmt.Sprintf("VFCMGT V%d.D2, V%d.D2, V%d.D2", hi, v, m)).  // m = v > hi
+										Raw(fmt.Sprintf("VBIT V%d.B16, V%d.B16, V%d.B16", m, hi, v))  // v = hi where m
+	})
+	return b
+}
+
+// maxAbsSig is func(v []float64) float64.
+func maxAbsSig() abi.Signature { return sumSig(abi.Float64) }
+
+// maxAbsF64 returns max |v[i]|; VFMAX/FMAXD propagate a NaN from either operand,
+// so a NaN anywhere is a NaN in the result without a side channel. Four
+// accumulators (V0..V3) in the ×8 loop, V0 only afterwards; the 1-element stage
+// loads D1 (upper half zero, |0| = 0 is neutral). The two lanes are folded
+// through GPRs as foldD2 does.
+func maxAbsF64() *arm64.Builder {
+	b := arm64.NewFunc("maxAbsNEON", maxAbsSig(), 0)
+	b.LoadArg("a_base", "R0").LoadArg("a_len", "R1").
+		Raw("VEOR V0.B16, V0.B16, V0.B16").Raw("VEOR V1.B16, V1.B16, V1.B16").
+		Raw("VEOR V2.B16, V2.B16, V2.B16").Raw("VEOR V3.B16, V3.B16, V3.B16").
+		Raw("MOVD $0, R3")
+	for _, s := range neonStages {
+		b.Label(s.label).
+			Raw(fmt.Sprintf("ADD $%d, R3, R4", s.elems)).Raw("CMP R1, R4")
+		if s.label == "uloop" {
+			b.Raw("BGT vcomb")
+		} else {
+			b.Raw("BGT " + s.next)
+		}
+		b.Raw("ADD R3<<3, R0, R5").
+			Raw(fmt.Sprintf("VLD1 (R5), %s", vregs(4, s.regs, s.arr)))
+		for k := 0; k < s.regs; k++ {
+			b.Raw(fmt.Sprintf("VFABS V%d.D2, V%d.D2", 4+k, 4+k))
+			if s.label == "uloop" {
+				b.Raw(fmt.Sprintf("VFMAX V%d.D2, V%d.D2, V%d.D2", 4+k, k, k))
+			} else {
+				b.Raw(fmt.Sprintf("VFMAX V%d.D2, V0.D2, V0.D2", 4+k))
+			}
+		}
+		b.Raw(fmt.Sprintf("ADD $%d, R3, R3", s.elems)).Raw("B " + s.label)
+		if s.label == "uloop" {
+			b.Label("vcomb").
+				Raw("VFMAX V1.D2, V0.D2, V0.D2").Raw("VFMAX V3.D2, V2.D2, V2.D2").
+				Raw("VFMAX V2.D2, V0.D2, V0.D2")
+		}
+	}
+	b.Label("done").
+		Raw("VMOV V0.D[0], R9").Raw("VMOV V0.D[1], R10"). // both lanes first: FMOVD to F0 clobbers V0
+		Raw("FMOVD R9, F1").Raw("FMOVD R10, F2").
+		Raw("FMAXD F2, F1, F0").
+		StoreRet("F0", "ret").Ret()
 	return b
 }
