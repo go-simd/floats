@@ -81,6 +81,10 @@ func main() {
 	f.Add(xpbyF64().Func())
 	f.Add(axpyDotF64().Func())
 	f.Add(scaleF64().Func())
+	f.Add(mulF64().Func())
+	f.Add(axpby3F64().Func())
+	f.Add(clampF64().Func())
+	f.Add(maxAbsF64().Func())
 	if err := os.WriteFile("kernels_amd64.s", []byte(f.String()), 0o644); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -383,5 +387,162 @@ func scaleF64() *amd64.Builder {
 			Raw("VMOVSD X1, (DI)(AX*8)")
 	})
 	b.Raw("VZEROUPPER").Ret()
+	return b
+}
+
+// ---- Mul, Axpby3, Clamp, MaxAbs ----
+//
+// Same skeleton as above (elemLoop: ×4 unrolled, then 4-wide, then scalar, every
+// access below n). Registers: DI = dst, SI = first input, DX = second, R9 =
+// third; each 4-vector block is loaded, computed and stored before the next, so
+// dst may be the same slice as any input.
+
+// mulSig is func(dst, a, b []float64).
+func mulSig() abi.Signature {
+	return abi.LayoutArgs(
+		[]abi.Arg{abi.Slice("dst"), abi.Slice("a"), abi.Slice("b")}, nil)
+}
+
+// mulF64: dst[i] = a[i]*b[i].
+func mulF64() *amd64.Builder {
+	b := amd64.NewFunc("mulAVX2", mulSig(), 0)
+	b.LoadArg("dst_base", "DI").LoadArg("a_base", "SI").LoadArg("a_len", "CX").LoadArg("b_base", "DX")
+	elemLoop(b, func(off int, r string) {
+		b.Raw("VMOVUPD %s, %s", mem("SI", off), r).
+			Raw("VMULPD %s, %s, %s", mem("DX", off), r, r).
+			Raw("VMOVUPD %s, %s", r, mem("DI", off))
+	}, func() {
+		b.Raw("VMOVSD (SI)(AX*8), X1").
+			Raw("VMULSD (DX)(AX*8), X1, X1").
+			Raw("VMOVSD X1, (DI)(AX*8)")
+	})
+	b.Raw("VZEROUPPER").Ret()
+	return b
+}
+
+// axpby3Sig is func(dst []float64, alpha float64, a []float64, beta float64,
+// b []float64, gamma float64, c []float64).
+func axpby3Sig() abi.Signature {
+	return abi.LayoutArgs(
+		[]abi.Arg{abi.Slice("dst"), abi.Scalar("alpha", abi.Float64), abi.Slice("a"),
+			abi.Scalar("beta", abi.Float64), abi.Slice("b"),
+			abi.Scalar("gamma", abi.Float64), abi.Slice("c")}, nil)
+}
+
+// axpby3F64: dst[i] = fma(gamma, c[i], fma(beta, b[i], alpha*a[i])). Y0/Y10/Y11 =
+// broadcast alpha/beta/gamma (X0/X10/X11 keep them for the scalar tail).
+func axpby3F64() *amd64.Builder {
+	b := amd64.NewFunc("axpby3AVX2", axpby3Sig(), 0)
+	b.LoadArg("alpha", "X0").LoadArg("beta", "X10").LoadArg("gamma", "X11").
+		LoadArg("dst_base", "DI").LoadArg("a_base", "SI").LoadArg("a_len", "CX").
+		LoadArg("b_base", "DX").LoadArg("c_base", "R9").
+		Raw("VBROADCASTSD X0, Y0").Raw("VBROADCASTSD X10, Y10").Raw("VBROADCASTSD X11, Y11")
+	elemLoop(b, func(off int, r string) {
+		b.Raw("VMULPD %s, Y0, %s", mem("SI", off), r). // r = alpha*a
+								Raw("VFMADD231PD %s, Y10, %s", mem("DX", off), r). // r += beta*b
+								Raw("VFMADD231PD %s, Y11, %s", mem("R9", off), r). // r += gamma*c
+								Raw("VMOVUPD %s, %s", r, mem("DI", off))
+	}, func() {
+		b.Raw("VMULSD (SI)(AX*8), X0, X1").
+			Raw("VFMADD231SD (DX)(AX*8), X10, X1").
+			Raw("VFMADD231SD (R9)(AX*8), X11, X1").
+			Raw("VMOVSD X1, (DI)(AX*8)")
+	})
+	b.Raw("VZEROUPPER").Ret()
+	return b
+}
+
+// clampSig is func(dst, v, lo, hi []float64).
+func clampSig() abi.Signature {
+	return abi.LayoutArgs(
+		[]abi.Arg{abi.Slice("dst"), abi.Slice("v"), abi.Slice("lo"), abi.Slice("hi")}, nil)
+}
+
+// clampF64: dst[i] = (lo>v ? lo : v), then (hi<r ? hi : r).
+//
+// VMAXPD/VMINPD return their SECOND source (the memory/last Plan 9 operand) when
+// the operands are equal or either is a NaN, and the compare is the strict one
+// the reference uses: MAX(src1, src2) = src1 > src2 ? src1 : src2, so
+// `VMAXPD v, lo, r` is lo > v ? lo : v — v wins ties (signed zeros) and a NaN
+// v, and a NaN lo is ignored. `VMINPD r, hi, r` is hi < r ? hi : r likewise. A
+// NaN v therefore passes through both steps with its own bits.
+func clampF64() *amd64.Builder {
+	b := amd64.NewFunc("clampAVX2", clampSig(), 0)
+	b.LoadArg("dst_base", "DI").LoadArg("v_base", "SI").LoadArg("v_len", "CX").
+		LoadArg("lo_base", "DX").LoadArg("hi_base", "R9")
+	elemLoop(b, func(off int, r string) {
+		b.Raw("VMOVUPD %s, %s", mem("DX", off), r).
+			Raw("VMAXPD %s, %s, %s", mem("SI", off), r, r).
+			Raw("VMOVUPD %s, Y5", mem("R9", off)).
+			Raw("VMINPD %s, Y5, %s", r, r).
+			Raw("VMOVUPD %s, %s", r, mem("DI", off))
+	}, func() {
+		b.Raw("VMOVSD (DX)(AX*8), X1").
+			Raw("VMAXSD (SI)(AX*8), X1, X1").
+			Raw("VMOVSD (R9)(AX*8), X5").
+			Raw("VMINSD X1, X5, X1").
+			Raw("VMOVSD X1, (DI)(AX*8)")
+	})
+	b.Raw("VZEROUPPER").Ret()
+	return b
+}
+
+// maxAbsSig is func(v []float64) float64.
+func maxAbsSig() abi.Signature { return sumSig(abi.Float64) }
+
+// maxAbsF64 returns max |v[i]|, or a NaN if any element is a NaN.
+//
+// |x| is x AND 0x7fff…: the mask is built in Y15 (all ones, shifted right by one)
+// so no data section is needed. VMAXPD is not NaN-sticky (it returns its second
+// source when unordered), so NaNs are tracked on the side: VCMPPD $3 (unordered)
+// of |x| with itself sets a lane, ORed into Y4. Four max accumulators (Y0..Y3)
+// hide the VMAXPD latency; they and the NaN lanes are folded before the scalar
+// tail, which runs on the low lane (a VEX.128 instruction zeroes the upper half,
+// so nothing vector-wide may be live then). The result is OR-ed with the NaN mask:
+// all ones is a NaN.
+func maxAbsF64() *amd64.Builder {
+	b := amd64.NewFunc("maxAbsAVX2", maxAbsSig(), 0)
+	b.LoadArg("a_base", "SI").LoadArg("a_len", "CX").
+		Raw("VPCMPEQD Y15, Y15, Y15").Raw("VPSRLQ $1, Y15, Y15").
+		Raw("VXORPD Y0, Y0, Y0").Raw("VXORPD Y1, Y1, Y1").
+		Raw("VXORPD Y2, Y2, Y2").Raw("VXORPD Y3, Y3, Y3").Raw("VXORPD Y4, Y4, Y4").
+		Raw("XORQ AX, AX").
+		Label("uloop").
+		Raw("LEAQ 16(AX), R8").Raw("CMPQ R8, CX").Raw("JGT vloop")
+	for k := 0; k < 4; k++ {
+		x := fmt.Sprintf("Y%d", 5+k)
+		m := fmt.Sprintf("Y%d", 9+k)
+		b.Raw("VANDPD %s, Y15, %s", mem("SI", 32*k), x).
+			Raw("VMAXPD %s, Y%d, Y%d", x, k, k).
+			Raw("VCMPPD $3, %s, %s, %s", x, x, m).
+			Raw("VORPD %s, Y4, Y4", m)
+	}
+	b.Raw("ADDQ $16, AX").Raw("JMP uloop").
+		Label("vloop").
+		Raw("VMAXPD Y1, Y0, Y0").Raw("VMAXPD Y3, Y2, Y2").Raw("VMAXPD Y2, Y0, Y0").
+		Label("vloop1").
+		Raw("LEAQ 4(AX), R8").Raw("CMPQ R8, CX").Raw("JGT vtail").
+		Raw("VANDPD (SI)(AX*8), Y15, Y5").
+		Raw("VMAXPD Y5, Y0, Y0").
+		Raw("VCMPPD $3, Y5, Y5, Y9").
+		Raw("VORPD Y9, Y4, Y4").
+		Raw("ADDQ $4, AX").Raw("JMP vloop1").
+		Label("vtail").
+		Raw("VEXTRACTF128 $1, Y0, X5").Raw("VMAXPD X5, X0, X0").
+		Raw("VUNPCKHPD X0, X0, X5").Raw("VMAXSD X5, X0, X0").
+		Raw("VEXTRACTF128 $1, Y4, X6").Raw("VORPD X6, X4, X4").
+		Raw("VUNPCKHPD X4, X4, X6").Raw("VORPD X6, X4, X4").
+		Label("sloop").
+		Raw("CMPQ AX, CX").Raw("JGE done").
+		Raw("VMOVSD (SI)(AX*8), X5").
+		Raw("VANDPD X15, X5, X5").
+		Raw("VMAXSD X5, X0, X0").
+		Raw("VCMPSD $3, X5, X5, X9").
+		Raw("VORPD X9, X4, X4").
+		Raw("ADDQ $1, AX").Raw("JMP sloop").
+		Label("done").
+		Raw("VORPD X4, X0, X0").
+		Raw("VZEROUPPER").
+		StoreRet("X0", "ret").Ret()
 	return b
 }

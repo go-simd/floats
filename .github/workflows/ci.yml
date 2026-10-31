@@ -27,6 +27,9 @@ jobs:
       # Fuzz targets run over their seed corpus deterministically (no -fuzz, no
       # time box, no flake); randomized time-boxed fuzzing runs nightly in fuzz.yml.
       - run: go test -run '^Fuzz' ./...
+      # The NumPy comparison tool is a module of its own (bench/numpycmp), so
+      # the root `./...` above does not cover it.
+      - run: cd bench/numpycmp && go vet ./... && go test ./...
   # macOS and Windows.
   #
   # A fleet audit of the 601 repositories holding Go code found the OS axis to

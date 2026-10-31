@@ -22,3 +22,13 @@ func axpy(alpha float64, x, y []float64)               { axpyRef(alpha, x, y) }
 func xpby(beta float64, x, y []float64)                { xpbyRef(beta, x, y) }
 func axpyDot(alpha float64, x, y, w []float64) float64 { return axpyDotRef(alpha, x, y, w) }
 func scale(alpha float64, x []float64)                 { scaleRef(alpha, x) }
+
+// Mul, Axpby3, Clamp and MaxAbs (elem.go) follow the same rule: assembly on
+// amd64 and arm64, the reference loops elsewhere.
+
+func mul(dst, a, b []float64) { mulRef(dst, a, b) }
+func axpby3(dst []float64, alpha float64, a []float64, beta float64, b []float64, gamma float64, c []float64) {
+	axpby3Ref(dst, alpha, a, beta, b, gamma, c)
+}
+func clamp(dst, v, lo, hi []float64) { clampRef(dst, v, lo, hi) }
+func maxAbs(v []float64) float64     { return maxAbsRef(v) }

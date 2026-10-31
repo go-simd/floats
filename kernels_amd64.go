@@ -22,6 +22,15 @@ func xpbyAVX2(beta float64, x, y []float64)
 func axpyDotAVX2(alpha float64, x, y, w []float64) float64
 func scaleAVX2(alpha float64, x []float64)
 
+// Mul, Axpby3, Clamp and MaxAbs (elem.go): VMULPD / VMULPD+2×VFMADD231PD /
+// VMAXPD+VMINPD / VANDPD+VMAXPD+NaN mask, each bit-identical to the reference in
+// elem.go. dst, b, c, lo and hi are already sliced to the length of the first
+// input.
+func mulAVX2(dst, a, b []float64)
+func axpby3AVX2(dst []float64, alpha float64, a []float64, beta float64, b []float64, gamma float64, c []float64)
+func clampAVX2(dst, v, lo, hi []float64)
+func maxAbsAVX2(a []float64) float64
+
 // hasAVX2FMA gates the AVX2 path; both AVX2 and FMA3 are required (VFMADD231*).
 // Almost every x86-64 part since Haswell (2013) has both. Without them the
 // kernels would #UD, so the dispatcher falls back to the lane-blocked scalar
@@ -99,4 +108,35 @@ func scale(alpha float64, x []float64) {
 		return
 	}
 	scaleRef(alpha, x)
+}
+
+func mul(dst, a, b []float64) {
+	if hasAVX2FMA {
+		mulAVX2(dst, a, b)
+		return
+	}
+	mulRef(dst, a, b)
+}
+
+func axpby3(dst []float64, alpha float64, a []float64, beta float64, b []float64, gamma float64, c []float64) {
+	if hasAVX2FMA {
+		axpby3AVX2(dst, alpha, a, beta, b, gamma, c)
+		return
+	}
+	axpby3Ref(dst, alpha, a, beta, b, gamma, c)
+}
+
+func clamp(dst, v, lo, hi []float64) {
+	if hasAVX2FMA {
+		clampAVX2(dst, v, lo, hi)
+		return
+	}
+	clampRef(dst, v, lo, hi)
+}
+
+func maxAbs(v []float64) float64 {
+	if hasAVX2FMA {
+		return maxAbsAVX2(v)
+	}
+	return maxAbsRef(v)
 }

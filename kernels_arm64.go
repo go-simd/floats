@@ -28,6 +28,21 @@ func xpbyNEON(beta float64, x, y []float64)
 func axpyDotNEON(alpha float64, x, y, w []float64) float64
 func scaleNEON(alpha float64, x []float64)
 
+// Mul, Axpby3, Clamp and MaxAbs (elem.go): VFMUL / VFMUL+2×VFMLA / FCMGT+BIT /
+// FABS+FMAX, each bit-identical to the reference in elem.go. dst, b, c, lo and hi
+// are already sliced to the length of the first input.
+func mulNEON(dst, a, b []float64)
+func axpby3NEON(dst []float64, alpha float64, a []float64, beta float64, b []float64, gamma float64, c []float64)
+func clampNEON(dst, v, lo, hi []float64)
+func maxAbsNEON(a []float64) float64
+
+func mul(dst, a, b []float64) { mulNEON(dst, a, b) }
+func axpby3(dst []float64, alpha float64, a []float64, beta float64, b []float64, gamma float64, c []float64) {
+	axpby3NEON(dst, alpha, a, beta, b, gamma, c)
+}
+func clamp(dst, v, lo, hi []float64) { clampNEON(dst, v, lo, hi) }
+func maxAbs(v []float64) float64     { return maxAbsNEON(v) }
+
 func axpy(alpha float64, x, y []float64)               { axpyNEON(alpha, x, y) }
 func xpby(beta float64, x, y []float64)                { xpbyNEON(beta, x, y) }
 func axpyDot(alpha float64, x, y, w []float64) float64 { return axpyDotNEON(alpha, x, y, w) }
