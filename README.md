@@ -212,6 +212,15 @@ the loop callers write by hand (`y[i] += alpha*x[i]`, …), single core:
 | `Scale`   | 1e5 | 15 753 | 35 058 | **2.23×** | 11 967 | 62 810 | **5.25×** |
 | `Scale`   | 1e6 | 158 718 | 351 821 | **2.22×** | 108 396 | 629 221 | **5.80×** |
 
+**`Mul`, `Axpby3`, `Clamp`, `MaxAbs` — measurement pending.** The benchmarks
+(`BenchmarkMul`, `BenchmarkAxpby3`, `BenchmarkClamp`, `BenchmarkClampCmp`,
+`BenchmarkMaxAbs`) and `bench/numpycmp` (this kernel against the Go loop and
+against `np.multiply`, `np.clip`, `np.abs(x).max()`, one core, interleaved
+rounds) are in the repository, but the numbers are not published yet: the tool
+refuses to run above a 1-minute load of 8 and the development machine stayed
+above 18 when this was written. A table will follow; until it does, treat
+"no slower than NumPy" as unverified.
+
 The M4 Max runs were on a shared workstation (1-minute load ≈ 6), the EPYC ones
 on a shared GitHub Actions runner (`ubuntu-latest`), so treat the absolute
 numbers as indicative. Every row is a win. The ubuntu-24.04-arm runner (Neoverse)
