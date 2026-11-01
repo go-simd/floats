@@ -34,6 +34,10 @@
 // (AVX2 FMA on amd64, NEON FMLA on arm64, the math.FMA loop elsewhere). Only
 // AxpyDot's returned sum is a reduction and follows the rules below.
 //
+// SumPairwise(a) is NumPy's np.sum(a) for a contiguous float64 array, bit for
+// bit on every architecture (scalar, pairwise, block 128, eight accumulators);
+// unlike Sum it does not follow the lane order below.
+//
 // # Floating-point determinism
 //
 // A SIMD reduction does not add its terms left-to-right: it keeps several

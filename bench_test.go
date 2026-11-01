@@ -276,6 +276,27 @@ func BenchmarkMaxAbs(b *testing.B) {
 	benchRun(b, 1, mk(MaxAbs), mk(naiveMaxAbsLoop))
 }
 
+func naiveSumLoop(v []float64) float64 {
+	s := 0.0
+	for _, x := range v {
+		s += x
+	}
+	return s
+}
+
+// BenchmarkSumPairwise: the "naive" side is the left-to-right loop; the NumPy
+// statement it is compared with is np.sum(a), whose result SumPairwise
+// reproduces bit for bit.
+func BenchmarkSumPairwise(b *testing.B) {
+	mk := func(f func(v []float64) float64) func(n int) func() {
+		return func(n int) func() {
+			d := benchData(n, 1)
+			return func() { sink = f(d[0]) }
+		}
+	}
+	benchRun(b, 1, mk(SumPairwise), mk(naiveSumLoop))
+}
+
 func sizeName(n int) string {
 	switch n {
 	case 8:

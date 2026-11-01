@@ -42,6 +42,7 @@ var ops = []op{
 	{"Axpby3", "BenchmarkAxpby3", "d[:] = 0.5*a - 1.5*b + 2.5*c"},
 	{"Clamp", "BenchmarkClamp", "np.clip(a, lo, hi, out=d)"},
 	{"MaxAbs", "BenchmarkMaxAbs", "np.abs(a).max()"},
+	{"SumPairwise", "BenchmarkSumPairwise", "np.sum(a)"},
 }
 
 var sizes = []int{1000, 100000, 1000000}
