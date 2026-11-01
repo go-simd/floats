@@ -121,6 +121,42 @@ returns `math.NaN()` if any element is NaN (either sign, quiet or signaling) and
 | arm64 | NEON, ×4 unrolled (`VFMUL`, `VFMLA`, `VFCMGT` + `VBIT` — not `FMAX`/`FMIN`, which treat NaN bounds and signed zeros differently —, `VFABS` + `VFMAX`) |
 | ppc64le, s390x, riscv64, loong64 | the portable loops, as for the updates above |
 
+### Reproducing `np.sum`: `SumPairwise` (float64)
+
+| function | computes |
+|---|---|
+| `SumPairwise(a)` | `Σ a[i]`, **bit-identical to `np.sum(a)`** for a contiguous 1-D float64 array; `+0` for an empty slice |
+
+`Sum` adds in the lane order of the SIMD kernels, which is fast but is not
+NumPy's order, so its last bits differ from `np.sum`. When a result must be
+reproducible against NumPy (a stopping test comparing `np.std` of a population
+with a tolerance, a regression against a NumPy oracle), use `SumPairwise`. It is
+NumPy's pairwise summation, transcribed from `DOUBLE_pairwise_sum`
+(`numpy/_core/src/umath/loops_utils.h.src`, v2.5.3): fewer than 8 elements are added
+left to right from `-0`; up to `PW_BLOCKSIZE` = 128 elements are summed with
+eight independent accumulators, folded as
+`((r0+r1)+(r2+r3)) + ((r4+r5)+(r6+r7))`, then the non-multiple-of-8 rest is
+added one by one; a longer block is split at `n/2` rounded down to a multiple of
+8 and the two halves are added. `np.add.reduce` then adds the result to its
+initial `+0`, so a slice holding only `-0` sums to `+0`, as in NumPy.
+
+It is **bit-identical on every architecture**: the order is fixed in the code,
+not by the width of a vector register, and no step is a fused multiply-add.
+**It is scalar Go, not SIMD** (the eight accumulators give the CPU its
+instruction-level parallelism; a vector version would have to keep the same
+association and was not worth one assembly kernel per architecture).
+
+Validated against NumPy 2.5.4 on 6 990 committed fixture cases: every length
+0..300 for nine value families (uniform, wide exponent, cancellation, ties at
+the rounding edge, ±0, `-0` only, `+Inf`, one NaN of either sign, a mix of
+±Inf / NaN / ±0), both sides of every block boundary `128·2^j ± 12` up to
+`j = 13`, and 1e5 / 1e6 / 2^20 with odd lengths around them — 0 mismatches.
+A NaN result is compared bit for bit when exactly one NaN enters the sum; with
+several NaNs (or `+Inf` and `-Inf`) which NaN comes out is hardware-dependent
+(in NumPy as here), so only "is NaN" is compared. The fixtures are regenerated
+with `SUMPW_REGEN=1 go test -run Regenerate .` (needs `uv`); `FuzzSumPairwise`
+checks against an independent index-based transcription.
+
 ## Why this library
 
 The Go SIMD-float landscape, compared:
