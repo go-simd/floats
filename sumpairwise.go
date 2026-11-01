@@ -23,11 +23,12 @@ const pwBlock = 128
 // -0 (the reduction starts from +0), as in NumPy. NaN and ±Inf propagate by IEEE 754 rules; when several NaNs are
 // summed which payload survives is, as in NumPy, up to the hardware.
 //
-// The implementation is scalar Go. NumPy's partial sums r[0..7] are eight
-// separate additions per step, which a four-lane vector would reproduce, but a
-// SIMD version has to keep that exact association and the gain over the
-// unrolled scalar loop below did not justify one assembly kernel per
-// architecture; see the README for the measured ratio against np.sum.
+// The 8..128-element blocks at the leaves of the recursion run in SIMD on amd64
+// (AVX2: the eight accumulators r[0..7] are two 4-lane YMM registers) and arm64
+// (NEON: four 2-lane registers); every lane receives exactly the additions
+// NumPy's scalar code performs on the matching r[j], so the bits do not change.
+// Elsewhere the portable Go block (pairwiseBlockRef) runs; it is also the
+// reference the tests compare the SIMD blocks against.
 func SumPairwise(a []float64) float64 {
 	// np.add.reduce starts the accumulator at the identity +0 and adds the
 	// pairwise sum of all n elements to it (DOUBLE_add:
@@ -57,28 +58,55 @@ func pairwise(a []float64) float64 {
 		return res
 	}
 	if n <= pwBlock {
-		r0, r1, r2, r3 := a[0], a[1], a[2], a[3]
-		r4, r5, r6, r7 := a[4], a[5], a[6], a[7]
-		i := 8
-		for ; i < n-n%8; i += 8 {
-			b := a[i : i+8 : i+8]
-			r0 += b[0]
-			r1 += b[1]
-			r2 += b[2]
-			r3 += b[3]
-			r4 += b[4]
-			r5 += b[5]
-			r6 += b[6]
-			r7 += b[7]
-		}
-		res := ((r0 + r1) + (r2 + r3)) + ((r4 + r5) + (r6 + r7))
-		for ; i < n; i++ {
-			res += a[i]
-		}
-		return res
+		return pairwiseBlock(a)
 	}
 	// Divide by two but avoid non-multiples of the unroll factor.
 	n2 := n / 2
 	n2 -= n2 % 8
 	return pairwise(a[:n2]) + pairwise(a[n2:])
+}
+
+// pairwiseBlockRef is the 8 <= n <= 128 branch of DOUBLE_pairwise_sum in
+// portable Go: eight independent accumulators, then the fixed tree, then the
+// n % 8 leftover elements. It is the reference for the SIMD pairwiseBlock.
+func pairwiseBlockRef(a []float64) float64 {
+	n := len(a)
+	r0, r1, r2, r3 := a[0], a[1], a[2], a[3]
+	r4, r5, r6, r7 := a[4], a[5], a[6], a[7]
+	i := 8
+	for ; i < n-n%8; i += 8 {
+		b := a[i : i+8 : i+8]
+		r0 += b[0]
+		r1 += b[1]
+		r2 += b[2]
+		r3 += b[3]
+		r4 += b[4]
+		r5 += b[5]
+		r6 += b[6]
+		r7 += b[7]
+	}
+	res := ((r0 + r1) + (r2 + r3)) + ((r4 + r5) + (r6 + r7))
+	for ; i < n; i++ {
+		res += a[i]
+	}
+	return res
+}
+
+// pairwiseRef is DOUBLE_pairwise_sum in portable Go throughout: the reference
+// the tests compare pairwise (which runs the SIMD blocks) against.
+func pairwiseRef(a []float64) float64 {
+	n := len(a)
+	if n < 8 {
+		res := pwNegZero
+		for _, v := range a {
+			res += v
+		}
+		return res
+	}
+	if n <= pwBlock {
+		return pairwiseBlockRef(a)
+	}
+	n2 := n / 2
+	n2 -= n2 % 8
+	return pairwiseRef(a[:n2]) + pairwiseRef(a[n2:])
 }

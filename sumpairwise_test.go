@@ -192,27 +192,170 @@ func sameSum(c pwCase, got, want float64) bool {
 	return math.Float64bits(got) == math.Float64bits(want)
 }
 
-func TestSumPairwiseMatchesNumPy(t *testing.T) {
+// sumMismatches runs sum over every fixture case and returns the number of cases
+// that differ from NumPy (the first few are reported to t when report is set),
+// and the number of cases whose NumPy answer is a NaN.
+//
+// Cases longer than maxN are skipped (0: none), which keeps the tests that run
+// the fixture several times fast under emulation.
+func sumMismatches(t *testing.T, sum func([]float64) float64, report bool, maxN int) (bad, nan, total int) {
+	t.Helper()
 	cs, want := fixtureCases(), fixtureWords()
 	if len(cs) != len(want) {
 		t.Fatalf("fixture has %d answers for %d cases; regenerate with SUMPW_REGEN=1", len(want), len(cs))
 	}
-	nan, bad := 0, 0
 	for i, c := range cs {
+		if maxN > 0 && c.n > maxN {
+			continue
+		}
+		total++
 		a := genCase(c)
-		got, w := SumPairwise(a), math.Float64frombits(want[i])
+		got, w := sum(a), math.Float64frombits(want[i])
 		if math.IsNaN(w) {
 			nan++
 		}
 		if !sameSum(c, got, w) {
 			bad++
-			if bad <= 20 {
+			if report && bad <= 20 {
 				t.Errorf("kind %d n %d seed %d: got %016x (%v), numpy %016x (%v)",
 					c.kind, c.n, c.seed, math.Float64bits(got), got, want[i], w)
 			}
 		}
 	}
-	t.Logf("%d cases (%d NaN answers) against numpy %s, %d mismatches", len(cs), nan, numpyVersion, bad)
+	return bad, nan, total
+}
+
+func TestSumPairwiseMatchesNumPy(t *testing.T) {
+	bad, nan, total := sumMismatches(t, SumPairwise, true, 0)
+	t.Logf("%d cases (%d NaN answers) against numpy %s, %d mismatches", total, nan, numpyVersion, bad)
+}
+
+// The reference the SIMD blocks are measured against must itself equal NumPy.
+func TestSumPairwiseReferenceMatchesNumPy(t *testing.T) {
+	bad, _, total := sumMismatches(t, func(a []float64) float64 { return pwInit + pairwiseRef(a) }, true, 5000)
+	t.Logf("portable reference: %d cases, %d mismatches", total, bad)
+}
+
+// Planted breaks: the fixture must tell NumPy's order from plausible others. A
+// sequential sum, a block summed with four accumulators, a tree that adds the
+// eight accumulators left to right, and a sum that starts from the first element
+// instead of +0 all have to be caught.
+func TestSumPairwiseFixtureCatchesPlantedBreaks(t *testing.T) {
+	sequential := func(a []float64) float64 {
+		s := 0.0
+		for _, v := range a {
+			s += v
+		}
+		return s
+	}
+	var plant func(a []float64, flat, four bool) float64
+	plant = func(a []float64, flat, four bool) float64 {
+		n := len(a)
+		if n < 8 {
+			res := pwNegZero
+			for _, v := range a {
+				res += v
+			}
+			return res
+		}
+		if n <= pwBlock {
+			var r [8]float64
+			copy(r[:], a)
+			i := 8
+			if four {
+				i = 4
+				copy(r[:4], a)
+				r[4], r[5], r[6], r[7] = 0, 0, 0, 0
+				for ; i < n-n%4; i += 4 {
+					for j := 0; j < 4; j++ {
+						r[j] += a[i+j]
+					}
+				}
+			} else {
+				for ; i < n-n%8; i += 8 {
+					for j := 0; j < 8; j++ {
+						r[j] += a[i+j]
+					}
+				}
+			}
+			res := ((r[0] + r[1]) + (r[2] + r[3])) + ((r[4] + r[5]) + (r[6] + r[7]))
+			if flat {
+				res = r[0] + r[1] + r[2] + r[3] + r[4] + r[5] + r[6] + r[7]
+			}
+			for ; i < n; i++ {
+				res += a[i]
+			}
+			return res
+		}
+		n2 := n / 2
+		n2 -= n2 % 8
+		return plant(a[:n2], flat, four) + plant(a[n2:], flat, four)
+	}
+	sanity := func(a []float64) float64 { return pwInit + plant(a, false, false) }
+	if bad, _, _ := sumMismatches(t, sanity, false, 5000); bad != 0 {
+		t.Fatalf("the unplanted copy of the algorithm differs from NumPy in %d cases", bad)
+	}
+	for name, f := range map[string]func([]float64) float64{
+		"sequential":        sequential,
+		"four accumulators": func(a []float64) float64 { return pwInit + plant(a, false, true) },
+		"flat tree":         func(a []float64) float64 { return pwInit + plant(a, true, false) },
+		"first element start": func(a []float64) float64 {
+			if len(a) == 0 {
+				return 0
+			}
+			return a[0] + pairwiseRef(a[1:])
+		},
+	} {
+		bad, _, total := sumMismatches(t, f, false, 5000)
+		if bad == 0 {
+			t.Errorf("planted break %q is not caught by the %d-case fixture", name, total)
+		}
+		t.Logf("planted %q: %d of %d cases differ", name, bad, total)
+	}
+}
+
+// The SIMD blocks against the portable reference on raw bit patterns (NaN, Inf,
+// subnormals, signed zeros), every length up to 700 and every start offset 0..7
+// (the vector loads are unaligned).
+func TestSumPairwiseSIMDMatchesReference(t *testing.T) {
+	r := rand.New(rand.NewPCG(21, 22))
+	for n := 0; n <= 700; n++ {
+		for off := 0; off < 8; off++ {
+			buf := make([]float64, off+n)
+			for i := range buf {
+				switch r.IntN(10) {
+				case 0:
+					buf[i] = math.Float64frombits(r.Uint64())
+				case 1:
+					buf[i] = math.Copysign(0, float64(r.IntN(2)*2-1))
+				default:
+					buf[i] = math.Ldexp(r.Float64()-0.5, r.IntN(120)-60)
+				}
+			}
+			a := buf[off:]
+			g, w := pwInit+pairwise(a), pwInit+pairwiseRef(a)
+			if math.IsNaN(w) != math.IsNaN(g) || (!math.IsNaN(w) && math.Float64bits(g) != math.Float64bits(w)) {
+				t.Fatalf("n=%d off=%d: SIMD %016x, reference %016x", n, off, math.Float64bits(g), math.Float64bits(w))
+			}
+		}
+	}
+}
+
+// pairwiseBlock itself, on every legal block length, against the portable block:
+// an Inf/NaN-free input so that equal means bit-equal.
+func TestPairwiseBlockAllLengths(t *testing.T) {
+	r := rand.New(rand.NewPCG(23, 24))
+	for n := 8; n <= pwBlock; n++ {
+		for try := 0; try < 20; try++ {
+			a := make([]float64, n)
+			for i := range a {
+				a[i] = math.Ldexp(r.Float64()-0.5, r.IntN(100)-50)
+			}
+			if g, w := pairwiseBlock(a), pairwiseBlockRef(a); math.Float64bits(g) != math.Float64bits(w) {
+				t.Fatalf("n=%d: %016x vs %016x", n, math.Float64bits(g), math.Float64bits(w))
+			}
+		}
+	}
 }
 
 // refPairwise is an independent transcription of the C: it works on indices
