@@ -48,7 +48,25 @@ type pwCase struct {
 // payload). That is only well defined when exactly one NaN enters the sum: with
 // several NaNs, or +Inf plus -Inf, which NaN comes out is up to the hardware,
 // and the fixture may have been produced on another one.
-func (c pwCase) strictNaN() bool { return c.kind == kindOneNaN }
+//
+// It also needs hardware that preserves a NaN operand through an addition. RISC-V
+// does not: its FP operations return the canonical NaN (0x7ff8000000000000),
+// dropping sign and payload (the unprivileged ISA spec, NaN generation and
+// propagation), so on riscv64 only "is NaN" can be compared. The test probes
+// the hardware rather than naming architectures.
+func (c pwCase) strictNaN() bool { return c.kind == kindOneNaN && nanSurvivesAdd }
+
+var probeOne = 1.0
+
+// nanSurvivesAdd reports whether NaN + 1 keeps the NaN's sign and payload.
+var nanSurvivesAdd = func() bool {
+	for _, b := range []uint64{0x7ff8000000000001, 0xfff8000000000001} {
+		if math.Float64bits(math.Float64frombits(b)+probeOne) != b {
+			return false
+		}
+	}
+	return true
+}()
 
 func genCase(c pwCase) []float64 {
 	r := rand.New(rand.NewPCG(c.seed, uint64(c.kind)+1))
