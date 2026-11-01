@@ -212,14 +212,36 @@ the loop callers write by hand (`y[i] += alpha*x[i]`, …), single core:
 | `Scale`   | 1e5 | 15 753 | 35 058 | **2.23×** | 11 967 | 62 810 | **5.25×** |
 | `Scale`   | 1e6 | 158 718 | 351 821 | **2.22×** | 108 396 | 629 221 | **5.80×** |
 
-**`Mul`, `Axpby3`, `Clamp`, `MaxAbs` — measurement pending.** The benchmarks
-(`BenchmarkMul`, `BenchmarkAxpby3`, `BenchmarkClamp`, `BenchmarkClampCmp`,
-`BenchmarkMaxAbs`) and `bench/numpycmp` (this kernel against the Go loop and
-against `np.multiply`, `np.clip`, `np.abs(x).max()`, one core, interleaved
-rounds) are in the repository, but the numbers are not published yet: the tool
-refuses to run above a 1-minute load of 8 and the development machine stayed
-above 18 when this was written. A table will follow; until it does, treat
-"no slower than NumPy" as unverified.
+**`Mul`, `Axpby3`, `Clamp`, `MaxAbs` against NumPy 2.5.4**, measured on
+2026-11-01 on the M4 Max (Python 3.12.12, `python -m timeit`), one core, median
+ns/op of 9 interleaved rounds (a Go benchmark run, then NumPy's, for every row),
+1-minute load 2.7. The tool is `bench/numpycmp` (`go test -c -o floats.test`,
+then `go run ./bench/numpycmp --binary ../../floats.test`); it refuses to run at
+a load of 8 or above. NumPy statements: `np.multiply(a, b, out=d)`,
+`d[:] = 0.5*a - 1.5*b + 2.5*c`, `np.clip(a, lo, hi, out=d)`, `np.abs(a).max()`.
+
+| op | n | `floats` | Go loop | NumPy | vs Go loop | vs NumPy |
+|---|---:|---:|---:|---:|---:|---:|
+| `Mul`    | 1e3 | 104 | 324 | 269 | **3.12×** | **2.59×** |
+| `Mul`    | 1e5 | 19 793 | 32 252 | 20 100 | **1.63×** | 1.02× |
+| `Mul`    | 1e6 | 198 848 | 294 678 | 195 000 | **1.48×** | 0.98× |
+| `Axpby3` | 1e3 | 164 | 405 | 2 030 | **2.47×** | **12.39×** |
+| `Axpby3` | 1e5 | 26 418 | 41 437 | 82 600 | **1.57×** | **3.13×** |
+| `Axpby3` | 1e6 | 266 062 | 422 107 | 820 000 | **1.59×** | **3.08×** |
+| `Clamp`  | 1e3 | 193 | 2 651 | 1 190 | **13.76×** | **6.18×** |
+| `Clamp`  | 1e5 | 26 385 | 277 483 | 58 200 | **10.52×** | **2.21×** |
+| `Clamp`  | 1e6 | 265 349 | 2 783 761 | 576 000 | **10.49×** | **2.17×** |
+| `MaxAbs` | 1e3 | 70 | 882 | 535 | **12.54×** | **7.61×** |
+| `MaxAbs` | 1e5 | 7 139 | 89 699 | 20 500 | **12.56×** | **2.87×** |
+| `MaxAbs` | 1e6 | 72 323 | 894 855 | 203 000 | **12.37×** | **2.81×** |
+
+`Axpby3`, `Clamp` and `MaxAbs` beat NumPy by 2.2 to 12×. `Mul` is a pure
+streaming multiply (three arrays, 2.4 MB at 1e5 and 24 MB at 1e6, so it runs at
+cache and memory bandwidth) and ties NumPy there: an earlier 7-round run read
+0.94× and 1.00× on the same two rows, the other 9-round run 1.02× and 0.98×, so
+the ±3% is run-to-run noise, not a gap that code can close; both are one load,
+one multiply and one store per element and the kernel is already unrolled 8
+wide. At n = 1e3 `Mul` is 2.6× faster than NumPy (no dispatch overhead).
 
 The M4 Max runs were on a shared workstation (1-minute load ≈ 6), the EPYC ones
 on a shared GitHub Actions runner (`ubuntu-latest`), so treat the absolute
