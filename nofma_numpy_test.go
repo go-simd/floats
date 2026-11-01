@@ -143,9 +143,6 @@ func nfElem(op nfOp, s [3]float64, v [4]float64) float64 {
 // zero. It also needs hardware that keeps a NaN through an addition.
 func strictNF(c nfCase, d nfData) []bool {
 	m := make([]bool, c.n)
-	if !nanSurvivesAdd {
-		return m
-	}
 	nIn := c.op.arrays()
 	for i := range m {
 		var v [4]float64
@@ -259,6 +256,15 @@ func nfHash(res []float64, strict []bool) uint64 {
 	return binary.LittleEndian.Uint64(h[:8])
 }
 
+func anyTrue(b []bool) bool {
+	for _, v := range b {
+		if v {
+			return true
+		}
+	}
+	return false
+}
+
 func nfFixtureWords() []uint64 {
 	w := make([]uint64, len(nofmaFixture)/8)
 	for i := range w {
@@ -277,7 +283,13 @@ func nfMismatches(t *testing.T, impl nfImpl) (bad [numNFOps]int, total int) {
 	}
 	for i, c := range cs {
 		d := genNF(c)
-		if nfHash(impl(c, d), strictNF(c, d)) != want[i] {
+		strict := strictNF(c, d)
+		if !nanSurvivesAdd && anyTrue(strict) {
+			// The fixture compares NaN bits here and this hardware (RISC-V)
+			// returns the canonical NaN: only the other cases can be compared.
+			continue
+		}
+		if nfHash(impl(c, d), strict) != want[i] {
 			bad[c.op]++
 			if bad[c.op] <= 3 {
 				t.Logf("differs: op %d kind %d n %d seed %d", c.op, c.kind, c.n, c.seed)
