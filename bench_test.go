@@ -297,6 +297,88 @@ func BenchmarkSumPairwise(b *testing.B) {
 	benchRun(b, 1, mk(SumPairwise), mk(naiveSumLoop))
 }
 
+// BenchmarkSumPairwiseRef: SumPairwise (SIMD blocks) against the portable Go
+// block, same bits, to isolate what the vector registers buy.
+func BenchmarkSumPairwiseRef(b *testing.B) {
+	mk := func(f func(v []float64) float64) func(n int) func() {
+		return func(n int) func() {
+			d := benchData(n, 1)
+			return func() { sink = f(d[0]) }
+		}
+	}
+	benchRun(b, 1, mk(SumPairwise), mk(func(a []float64) float64 { return pwInit + pairwiseRef(a) }))
+}
+
+// ---- the unfused kernels against the loops written by hand ----
+//
+// The loops convert every product with float64(...), which is what keeps Go from
+// fusing it on arm64 and the other FMA architectures; without it the "naive" loop
+// would compute (and cost) something else.
+
+func naiveAxpyNoFMA(alpha float64, x, y []float64) {
+	for i, v := range x {
+		y[i] = y[i] + float64(alpha*v)
+	}
+}
+
+func naiveXpbyNoFMA(x []float64, beta float64, y []float64) {
+	for i, v := range x {
+		y[i] = v + float64(beta*y[i])
+	}
+}
+
+func naiveAxpby3NoFMA(dst []float64, al float64, a []float64, be float64, b []float64, ga float64, c []float64) {
+	for i, v := range a {
+		dst[i] = float64(al*v) + float64(be*b[i]) + float64(ga*c[i])
+	}
+}
+
+func naiveAxpyDiffNoFMA(dst, a []float64, f float64, b, c []float64) {
+	for i, v := range a {
+		dst[i] = v + float64(f*(b[i]-c[i]))
+	}
+}
+
+func BenchmarkAxpyNoFMA(b *testing.B) {
+	mk := func(f func(al float64, x, y []float64)) func(n int) func() {
+		return func(n int) func() {
+			d := benchData(n, 2)
+			return func() { f(0.5, d[0], d[1]) }
+		}
+	}
+	benchRun(b, 2, mk(AxpyNoFMA), mk(naiveAxpyNoFMA))
+}
+
+func BenchmarkXpbyNoFMA(b *testing.B) {
+	mk := func(f func(x []float64, be float64, y []float64)) func(n int) func() {
+		return func(n int) func() {
+			d := benchData(n, 2)
+			return func() { f(d[0], 0.5, d[1]) }
+		}
+	}
+	benchRun(b, 2, mk(XpbyNoFMA), mk(naiveXpbyNoFMA))
+}
+
+func BenchmarkAxpby3NoFMA(b *testing.B) {
+	mk := func(f func(d []float64, al float64, a []float64, be float64, b []float64, ga float64, c []float64)) func(n int) func() {
+		return func(n int) func() {
+			d := benchData(n, 4)
+			return func() { f(d[0], 0.5, d[1], -1.5, d[2], 2.5, d[3]) }
+		}
+	}
+	benchRun(b, 4, mk(Axpby3NoFMA), mk(naiveAxpby3NoFMA))
+}
+
+func BenchmarkAxpyDiffNoFMA(b *testing.B) {
+	mk := func(f func(dst, a []float64, f float64, b, c []float64)) func(n int) func() {
+		return func(n int) func() {
+			d := benchData(n, 4)
+			return func() { f(d[0], d[1], 0.5, d[2], d[3]) }
+		}
+	}
+	benchRun(b, 4, mk(AxpyDiffNoFMA), mk(naiveAxpyDiffNoFMA))
+}
+
 func sizeName(n int) string {
 	switch n {
 	case 8:
