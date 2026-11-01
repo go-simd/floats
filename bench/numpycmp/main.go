@@ -43,6 +43,10 @@ var ops = []op{
 	{"Clamp", "BenchmarkClamp", "np.clip(a, lo, hi, out=d)"},
 	{"MaxAbs", "BenchmarkMaxAbs", "np.abs(a).max()"},
 	{"SumPairwise", "BenchmarkSumPairwise", "np.sum(a)"},
+	{"AxpyNoFMA", "BenchmarkAxpyNoFMA", "d[:] = b + 0.5*a"},
+	{"XpbyNoFMA", "BenchmarkXpbyNoFMA", "d[:] = a + 0.5*b"},
+	{"Axpby3NoFMA", "BenchmarkAxpby3NoFMA", "d[:] = 0.5*a + -1.5*b + 2.5*c"},
+	{"AxpyDiffNoFMA", "BenchmarkAxpyDiffNoFMA", "d[:] = a + 0.5*(b - c)"},
 }
 
 var sizes = []int{1000, 100000, 1000000}
