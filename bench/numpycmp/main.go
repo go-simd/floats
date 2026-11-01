@@ -1,5 +1,6 @@
-// Command numpycmp measures go-simd/floats Mul, Clamp and MaxAbs against the
-// plain Go loop and against NumPy (np.multiply, np.clip, np.abs(x).max()) on one
+// Command numpycmp measures go-simd/floats Mul, Axpby3, Clamp and MaxAbs against
+// the plain Go loop and against NumPy (np.multiply, an a*x+b*y+c*z expression,
+// np.clip, np.abs(x).max()) on one
 // core, in interleaved rounds: every round runs the Go benchmark binary and then
 // NumPy's own `python3 -m timeit` for each (op, n), and the median over rounds is
 // reported. It refuses to run when the 1-minute load is at or above 8, because
@@ -38,6 +39,7 @@ type op struct {
 
 var ops = []op{
 	{"Mul", "BenchmarkMul", "np.multiply(a, b, out=d)"},
+	{"Axpby3", "BenchmarkAxpby3", "d[:] = 0.5*a - 1.5*b + 2.5*c"},
 	{"Clamp", "BenchmarkClamp", "np.clip(a, lo, hi, out=d)"},
 	{"MaxAbs", "BenchmarkMaxAbs", "np.abs(a).max()"},
 }
@@ -46,7 +48,7 @@ var sizes = []int{1000, 100000, 1000000}
 
 func numpySetup(n int) string {
 	return fmt.Sprintf("import numpy as np; n=%d; r=np.random.default_rng(7); "+
-		"a=r.standard_normal(n); b=r.standard_normal(n); d=np.empty(n); "+
+		"a=r.standard_normal(n); b=r.standard_normal(n); c=r.standard_normal(n); d=np.empty(n); "+
 		"lo=-np.abs(r.standard_normal(n)); hi=np.abs(r.standard_normal(n))", n)
 }
 
