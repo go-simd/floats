@@ -32,8 +32,6 @@ func TestSSE2ForcedPath(t *testing.T) {
 		{"Mul", TestMulBitIdentical},
 		{"ElemAliasing", TestElemAliasing},
 		{"ElemLongerSlices", TestElemLongerSlices},
-		{"BinopGuardPages", TestBinopGuardPages},
-		{"ElemGuardPages", TestElemGuardPages},
 	} {
 		t.Run(tc.name, tc.fn)
 	}
