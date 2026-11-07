@@ -121,7 +121,7 @@ returns `math.NaN()` if any element is NaN (either sign, quiet or signaling) and
 |---|---|
 | amd64 | AVX2+FMA, ×4 unrolled (`VMULPD`, `VFMADD231PD`, `VMAXPD`/`VMINPD` with the operand order that gives the strict compare, `VANDPD` + `VMAXPD` + an unordered-compare NaN mask), same `HasAVX2 && HasFMA` gate |
 | arm64 | NEON, ×4 unrolled (`VFMUL`, `VFMLA`, `VFCMGT` + `VBIT` — not `FMAX`/`FMIN`, which treat NaN bounds and signed zeros differently —, `VFABS` + `VFMAX`) |
-| ppc64le, s390x, riscv64, loong64 | the portable loops, as for the updates above |
+| ppc64le, s390x, riscv64, loong64 | the portable loops, as for the updates above (`Mul` has a kernel there, see below) |
 
 ### Elementwise `Add`, `Sub`, `Div`, `Sqrt`, `ClampScalar` (float64)
 
@@ -142,7 +142,11 @@ usual gate) runs `VADDPD`/`VSUBPD`/`VDIVPD`/`VSQRTPD`, arm64 NEON
 (`binop_*_gen.go`). An amd64 CPU without AVX2+FMA runs SSE2 kernels (`ADDPD`,
 `SUBPD`, `MULPD`, `DIVPD`, `SQRTPD`, `MAXPD`/`MINPD` for `ClampScalar`; SSE2 is the
 amd64 baseline, no feature test; `sse2_amd64_gen.go`), also bit-identical; CI
-forces that path on its AVX2 hosts (`TestSSE2ForcedPath`). The other
+forces that path on its AVX2 hosts (`TestSSE2ForcedPath`). ppc64le (VSX),
+loong64 (LASX, gated on the CPU), riscv64 (RVV 1.0, gated) and s390x (the z13
+vector facility) run `XVADDDP`/`XVADDD`/`VFADDVV`/`VFADB` and their siblings
+(`lanes_<arch>_gen.go`; on a native IBM z17, Add and Mul are 2.2x the compiler
+loops, Div, Sqrt and `SumPairwise` 1.0-1.1x, never slower); the remaining
 architectures run the portable loops. Like `Mul`
 they work on the first `len(a)` elements, panic if another slice is shorter,
 allow `dst` to alias an input, never read or write past a slice (guard-page
@@ -240,7 +244,9 @@ not by the width of a vector register, and no step is a fused multiply-add.
 **The 8..128-element blocks run in SIMD** on amd64 (AVX2: the eight accumulators
 `r[0..7]` are two 4-lane YMM registers, `VADDPD` per step, the fold
 `((r0+r1)+(r2+r3)) + ((r4+r5)+(r6+r7))` by `VHADDPD` + `VEXTRACTF128` + `VADDSD`) and
-arm64 (NEON: four 2-lane registers, `VFADD` per step, the fold by `VFADDP`):
+arm64 (NEON: four 2-lane registers, `VFADD` per step, the fold by `VFADDP`),
+and on ppc64le (VSX), loong64 (LASX), riscv64 (RVV, one `vl=8` group) and s390x
+(VX), with the same accumulator-per-lane structure:
 every lane receives exactly the additions NumPy's scalar code performs on its
 `r[j]`, so the bits do not change. The recursion, the `n < 8` start from `-0`,
 the `n % 8` tail and the initial `+0` stay as above; the other architectures run
