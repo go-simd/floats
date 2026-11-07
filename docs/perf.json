@@ -1,0 +1,1371 @@
+{
+  "schema": 1,
+  "status": "deferred",
+  "date": "2026-11-07T21:15:06+01:00",
+  "commit": "5fcc534",
+  "repo": "go-simd/floats",
+  "go_version": "go1.27.3",
+  "machine": "darwin/arm64 (deferred: 1-minute load 33)",
+  "ref_versions": {
+    "numpy": "2.5.4 (refs.txt)"
+  },
+  "max_load": 8,
+  "load": {
+    "min": 0,
+    "median": 0,
+    "max": 0
+  },
+  "valid": true,
+  "rows": [
+    {
+      "name": "Dot/1000",
+      "func": "Dot",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Sum/1000",
+      "func": "Sum",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "SumPairwise/1000",
+      "func": "SumPairwise",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Min/1000",
+      "func": "Min",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Max/1000",
+      "func": "Max",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Distance/1000",
+      "func": "Distance",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "CosineSimilarity/1000",
+      "func": "CosineSimilarity",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Float32Dot/1000",
+      "func": "Float32Dot",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Float32Sum/1000",
+      "func": "Float32Sum",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Float32Min/1000",
+      "func": "Float32Min",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Float32Max/1000",
+      "func": "Float32Max",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Float32Distance/1000",
+      "func": "Float32Distance",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Float32CosineSimilarity/1000",
+      "func": "Float32CosineSimilarity",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Axpy/1000",
+      "func": "Axpy",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Xpby/1000",
+      "func": "Xpby",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "AxpyDot/1000",
+      "func": "AxpyDot",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Scale/1000",
+      "func": "Scale",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Mul/1000",
+      "func": "Mul",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Axpby3/1000",
+      "func": "Axpby3",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Clamp/1000",
+      "func": "Clamp",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "MaxAbs/1000",
+      "func": "MaxAbs",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "AxpyNoFMA/1000",
+      "func": "AxpyNoFMA",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "XpbyNoFMA/1000",
+      "func": "XpbyNoFMA",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Axpby3NoFMA/1000",
+      "func": "Axpby3NoFMA",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "AxpyDiffNoFMA/1000",
+      "func": "AxpyDiffNoFMA",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Dot/100000",
+      "func": "Dot",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Sum/100000",
+      "func": "Sum",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "SumPairwise/100000",
+      "func": "SumPairwise",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Min/100000",
+      "func": "Min",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Max/100000",
+      "func": "Max",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Distance/100000",
+      "func": "Distance",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "CosineSimilarity/100000",
+      "func": "CosineSimilarity",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Float32Dot/100000",
+      "func": "Float32Dot",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Float32Sum/100000",
+      "func": "Float32Sum",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Float32Min/100000",
+      "func": "Float32Min",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Float32Max/100000",
+      "func": "Float32Max",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Float32Distance/100000",
+      "func": "Float32Distance",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Float32CosineSimilarity/100000",
+      "func": "Float32CosineSimilarity",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Axpy/100000",
+      "func": "Axpy",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Xpby/100000",
+      "func": "Xpby",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "AxpyDot/100000",
+      "func": "AxpyDot",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Scale/100000",
+      "func": "Scale",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Mul/100000",
+      "func": "Mul",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Axpby3/100000",
+      "func": "Axpby3",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Clamp/100000",
+      "func": "Clamp",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "MaxAbs/100000",
+      "func": "MaxAbs",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "AxpyNoFMA/100000",
+      "func": "AxpyNoFMA",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "XpbyNoFMA/100000",
+      "func": "XpbyNoFMA",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Axpby3NoFMA/100000",
+      "func": "Axpby3NoFMA",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "AxpyDiffNoFMA/100000",
+      "func": "AxpyDiffNoFMA",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Dot/1000000",
+      "func": "Dot",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Sum/1000000",
+      "func": "Sum",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "SumPairwise/1000000",
+      "func": "SumPairwise",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Min/1000000",
+      "func": "Min",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Max/1000000",
+      "func": "Max",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Distance/1000000",
+      "func": "Distance",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "CosineSimilarity/1000000",
+      "func": "CosineSimilarity",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Float32Dot/1000000",
+      "func": "Float32Dot",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Float32Sum/1000000",
+      "func": "Float32Sum",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Float32Min/1000000",
+      "func": "Float32Min",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Float32Max/1000000",
+      "func": "Float32Max",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Float32Distance/1000000",
+      "func": "Float32Distance",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Float32CosineSimilarity/1000000",
+      "func": "Float32CosineSimilarity",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Axpy/1000000",
+      "func": "Axpy",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Xpby/1000000",
+      "func": "Xpby",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "AxpyDot/1000000",
+      "func": "AxpyDot",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Scale/1000000",
+      "func": "Scale",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Mul/1000000",
+      "func": "Mul",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Axpby3/1000000",
+      "func": "Axpby3",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Clamp/1000000",
+      "func": "Clamp",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "MaxAbs/1000000",
+      "func": "MaxAbs",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "AxpyNoFMA/1000000",
+      "func": "AxpyNoFMA",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "XpbyNoFMA/1000000",
+      "func": "XpbyNoFMA",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Axpby3NoFMA/1000000",
+      "func": "Axpby3NoFMA",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "AxpyDiffNoFMA/1000000",
+      "func": "AxpyDiffNoFMA",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    }
+  ]
+}
