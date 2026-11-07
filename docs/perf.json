@@ -1,8 +1,8 @@
 {
   "schema": 1,
   "status": "deferred",
-  "date": "2026-11-07T21:15:06+01:00",
-  "commit": "5fcc534",
+  "date": "2026-11-07T21:30:25+01:00",
+  "commit": "k1",
   "repo": "go-simd/floats",
   "go_version": "go1.27.3",
   "machine": "darwin/arm64 (deferred: 1-minute load 33)",
@@ -326,6 +326,96 @@
     {
       "name": "Mul/1000",
       "func": "Mul",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Add/1000",
+      "func": "Add",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Sub/1000",
+      "func": "Sub",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Div/1000",
+      "func": "Div",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Sqrt/1000",
+      "func": "Sqrt",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "ClampScalar/1000",
+      "func": "ClampScalar",
       "reference": "numpy",
       "parity": "exact",
       "allocs": 0,
@@ -792,6 +882,96 @@
       "ratio": 0
     },
     {
+      "name": "Add/100000",
+      "func": "Add",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Sub/100000",
+      "func": "Sub",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Div/100000",
+      "func": "Div",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Sqrt/100000",
+      "func": "Sqrt",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "ClampScalar/100000",
+      "func": "ClampScalar",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
       "name": "Axpby3/100000",
       "func": "Axpby3",
       "reference": "numpy",
@@ -1226,6 +1406,96 @@
     {
       "name": "Mul/1000000",
       "func": "Mul",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Add/1000000",
+      "func": "Add",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Sub/1000000",
+      "func": "Sub",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Div/1000000",
+      "func": "Div",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Sqrt/1000000",
+      "func": "Sqrt",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "ClampScalar/1000000",
+      "func": "ClampScalar",
       "reference": "numpy",
       "parity": "exact",
       "allocs": 0,
