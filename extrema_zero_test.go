@@ -121,3 +121,31 @@ func refMin(a []float64) float64 {
 	}
 	return m
 }
+
+// TestMaxMinKernelsMatchLoops compares the dispatched Max/Min (SIMD kernels on
+// amd64 and arm64) with the loops on long random slices holding ±Inf, ±0 and
+// repeated values, every length from 1 to 200.
+func TestMaxMinKernelsMatchLoops(t *testing.T) {
+	vals := []float64{math.Inf(1), math.Inf(-1), 0, negZero, 1, -1, 2.5, -2.5, 1e300, -1e300, 5e-324}
+	seed := uint64(88172645463325252)
+	next := func() int {
+		seed ^= seed << 13
+		seed ^= seed >> 7
+		seed ^= seed << 17
+		return int(seed % uint64(len(vals)))
+	}
+	for n := 1; n <= 200; n++ {
+		for rep := 0; rep < 20; rep++ {
+			a := make([]float64, n)
+			for i := range a {
+				a[i] = vals[next()]
+			}
+			if g, w := Max(a), maxRef(a); math.Float64bits(g) != math.Float64bits(w) {
+				t.Fatalf("Max n=%d: got %v want %v (%v)", n, g, w, a)
+			}
+			if g, w := Min(a), minRef(a); math.Float64bits(g) != math.Float64bits(w) {
+				t.Fatalf("Min n=%d: got %v want %v (%v)", n, g, w, a)
+			}
+		}
+	}
+}

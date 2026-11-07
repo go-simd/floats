@@ -79,9 +79,23 @@ func Min(a []float64) float64 {
 	if len(a) == 0 {
 		panic("floats: Min of empty slice")
 	}
+	return minF64(a)
+}
+
+// minRef and maxRef are the loops: the portable implementation and the oracle of
+// the kernels' fix-ups.
+func minRef(a []float64) float64 {
 	m := a[0]
 	for _, v := range a[1:] {
 		m = min(m, v)
+	}
+	return m
+}
+
+func maxRef(a []float64) float64 {
+	m := a[0]
+	for _, v := range a[1:] {
+		m = max(m, v)
 	}
 	return m
 }
@@ -93,11 +107,7 @@ func Max(a []float64) float64 {
 	if len(a) == 0 {
 		panic("floats: Max of empty slice")
 	}
-	m := a[0]
-	for _, v := range a[1:] {
-		m = max(m, v)
-	}
-	return m
+	return maxF64(a)
 }
 
 // Distance returns the Euclidean (L2) distance ‖a−b‖₂ = √Σ(aᵢ−bᵢ)². It panics
