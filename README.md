@@ -33,7 +33,7 @@ For `[]float64` (top-level) and `[]float32` (the `Float32*` functions):
 |---|---|---|
 | `Dot(a, b)`              | `Float32Dot(a, b)`              | a·b = Σ aᵢbᵢ |
 | `Sum(a)`                 | `Float32Sum(a)`                 | Σ aᵢ |
-| `Min(a)` / `Max(a)`      | `Float32Min(a)` / `Float32Max(a)` | min / max element (NaN-propagating) |
+| `Min(a)` / `Max(a)`      | `Float32Min(a)` / `Float32Max(a)` | min / max element (NaN-propagating; `-0 < +0` as NumPy: max of a mix with a `+0` is `+0`, min of a mix with a `-0` is `-0`) |
 | `Distance(a, b)`         | `Float32Distance(a, b)`         | ‖a−b‖₂ = √Σ(aᵢ−bᵢ)² |
 | `CosineSimilarity(a, b)` | `Float32CosineSimilarity(a, b)` | a·b / (‖a‖₂‖b‖₂) |
 
