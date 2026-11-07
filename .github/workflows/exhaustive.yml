@@ -1,0 +1,34 @@
+name: exhaustive
+
+# The correct-rounding proofs of Float32Exp and Float32Log over all 2^32 float32
+# inputs (TestExp32CorrectlyRounded, TestLog32CorrectlyRounded, TestLogCRMatchesLog32:
+# a 300-bit reference and a certifier decide the hard cases). About five minutes on
+# one core of an Apple M-series, so they run on demand, on the two architectures that
+# have kernels: AVX2 (amd64) and NEON (arm64). Start it with
+#   gh workflow run exhaustive.yml
+# after any change to explog_*, exp32.go, log32.go or their generators.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  proofs:
+    name: proofs (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: 1.27.3
+      - run: go env GOARCH
+      - name: All 2^32 inputs
+        env:
+          NDARRAY_EXHAUSTIVE: "1"
+        run: go test -count=1 -timeout 0 -v -run 'TestExp32CorrectlyRounded|TestLog32CorrectlyRounded|TestLog32Exceptions|TestCertified32|TestLogCRMatchesLog32' .
