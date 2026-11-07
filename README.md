@@ -144,6 +144,33 @@ they work on the first `len(a)` elements, panic if another slice is shorter,
 allow `dst` to alias an input, never read or write past a slice (guard-page
 tests).
 
+### `Exp`, `Log` (float64) and `Float32Exp`, `Float32Log`
+
+| function | computes | parity with NumPy |
+|---|---|---|
+| `Exp(dst, src)` / `Log(dst, src)` | `exp` / `log` of every `src[i]`, float64, 0.511 / 0.519 ULP (Arm optimized-routines, MIT) | **tolerance** (ULP-bounded, not NumPy's bits) |
+| `Float32Exp(dst, src)` / `Float32Log(dst, src)` | the **correctly rounded** float32 `exp` / `log` | correct rounding is the reference: every float32 input rounds as the exact value does (proven over all 2^32 inputs by the env-gated `TestExp32CorrectlyRounded` / `TestLog32CorrectlyRounded`, `NDARRAY_EXHAUSTIVE=1`, a 300-bit reference and a certifier; every 65537th input without it); labelled **tolerance** against NumPy, whose float32 exp/log are not correctly rounded |
+
+Moved here from go-ndarray's `internal/kernels` (K1 of the go-scikit
+[performance campaign](https://github.com/go-scikit/roadmap/blob/main/docs/performance-campaign.md)),
+with the kernels written there: the AVX2 float32 exp/log (go-ndarray#94), the AVX2
+float64 log (go-ndarray#96) and the NEON float32 exp/log (go-ndarray#95). The
+float32 functions compute in float64 and round once: `expCR` is Arm's correctly
+rounded `expf` (optimized-routines, MIT; `math.FMA` exactly where `cr_expf`
+fuses) and `logCR` is CORE-MATH's correctly rounded `logf` (MIT; every product
+wrapped in `float64(...)` so no architecture fuses it). **Bit-identity to those
+Go transcriptions is the oracle**: the AVX2 (amd64) and NEON (arm64) kernels run
+the same operations in the same order, and a block of 8 holding a lane they do not
+finish (a NaN or |x| > 512 for exp; a non-positive-normal input or bounds that
+round apart for log) is not stored, it is handed back to Go. Float64 `Log` has an
+AVX2 kernel (blocks of 4, handed back likewise) on amd64; float64 `Exp` and `Log`
+on arm64 and every other architecture, and the float32 functions on the other
+four, run the Go loops. The NEON kernels use instructions Go's assembler spells
+only as `WORD` in go-asmgen's output (FCVTL/FCVTN, UXTL/SXTL, SCVTF, FACGE, CMGT,
+BIC); `go tool objdump` on the test binary shows each disassembling to the
+mnemonic its comment claims. Nothing allocates. Timing against NumPy is deferred
+(`bench/perf`).
+
 ### Unfused, NumPy-exact updates (float64)
 
 | function | computes (NumPy expression) |

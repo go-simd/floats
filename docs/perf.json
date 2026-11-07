@@ -1,11 +1,11 @@
 {
   "schema": 1,
   "status": "deferred",
-  "date": "2026-11-07T21:30:25+01:00",
-  "commit": "k1",
+  "date": "2026-11-07T22:08:47+01:00",
+  "commit": "k1b",
   "repo": "go-simd/floats",
   "go_version": "go1.27.3",
-  "machine": "darwin/arm64 (deferred: 1-minute load 33)",
+  "machine": "darwin/arm64 (deferred: 1-minute load 16)",
   "ref_versions": {
     "numpy": "2.5.4 (refs.txt)"
   },
@@ -328,6 +328,78 @@
       "func": "Mul",
       "reference": "numpy",
       "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Exp/1000",
+      "func": "Exp",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Log/1000",
+      "func": "Log",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Float32Exp/1000",
+      "func": "Float32Exp",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Float32Log/1000",
+      "func": "Float32Log",
+      "reference": "numpy",
+      "parity": "tolerance",
       "allocs": 0,
       "go": {
         "median": 0,
@@ -882,6 +954,78 @@
       "ratio": 0
     },
     {
+      "name": "Exp/100000",
+      "func": "Exp",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Log/100000",
+      "func": "Log",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Float32Exp/100000",
+      "func": "Float32Exp",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Float32Log/100000",
+      "func": "Float32Log",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
       "name": "Add/100000",
       "func": "Add",
       "reference": "numpy",
@@ -1408,6 +1552,78 @@
       "func": "Mul",
       "reference": "numpy",
       "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Exp/1000000",
+      "func": "Exp",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Log/1000000",
+      "func": "Log",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Float32Exp/1000000",
+      "func": "Float32Exp",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Float32Log/1000000",
+      "func": "Float32Log",
+      "reference": "numpy",
+      "parity": "tolerance",
       "allocs": 0,
       "go": {
         "median": 0,
