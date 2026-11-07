@@ -23,9 +23,7 @@ func Float32Min(a []float32) float32 {
 	}
 	m := a[0]
 	for _, v := range a[1:] {
-		if v < m || isNaN32(v) {
-			m = v
-		}
+		m = min(m, v)
 	}
 	return m
 }
@@ -38,9 +36,7 @@ func Float32Max(a []float32) float32 {
 	}
 	m := a[0]
 	for _, v := range a[1:] {
-		if v > m || isNaN32(v) {
-			m = v
-		}
+		m = max(m, v)
 	}
 	return m
 }

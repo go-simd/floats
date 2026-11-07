@@ -73,31 +73,29 @@ func Dot(a, b []float64) float64 {
 func Sum(a []float64) float64 { return sum(a) }
 
 // Min returns the smallest element of a. It panics if a is empty. If a contains
-// a NaN the result is NaN.
+// a NaN the result is NaN. Signed zeros are ordered -0 < +0, as NumPy's np.min
+// and Go's builtin min: the minimum of any mix containing a -0 is -0.
 func Min(a []float64) float64 {
 	if len(a) == 0 {
 		panic("floats: Min of empty slice")
 	}
 	m := a[0]
 	for _, v := range a[1:] {
-		if v < m || math.IsNaN(v) {
-			m = v
-		}
+		m = min(m, v)
 	}
 	return m
 }
 
 // Max returns the largest element of a. It panics if a is empty. If a contains
-// a NaN the result is NaN.
+// a NaN the result is NaN. Signed zeros are ordered -0 < +0, as NumPy's np.max
+// and Go's builtin max: the maximum of any mix containing a +0 is +0.
 func Max(a []float64) float64 {
 	if len(a) == 0 {
 		panic("floats: Max of empty slice")
 	}
 	m := a[0]
 	for _, v := range a[1:] {
-		if v > m || math.IsNaN(v) {
-			m = v
-		}
+		m = max(m, v)
 	}
 	return m
 }
