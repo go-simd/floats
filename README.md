@@ -438,6 +438,16 @@ and `Distance`/`CosineSimilarity` build on those and are unchanged; float32 uses
 the lane-blocked scalar reference as before. Correctness on s390x is validated
 under QEMU *and* on real z15 silicon.
 
+## Changes in v0.10.0
+
+- `Max`, `Min`, `Float32Max`, `Float32Min` order `-0 < +0` like NumPy and Go's
+  `max`/`min` (#32).
+- amd64 CPUs without AVX2+FMA run SSE2 kernels for `Add`, `Sub`, `Mul`, `Div`,
+  `Sqrt`, `ClampScalar` (#31).
+- ppc64le, loong64, riscv64 and s390x run the `SumPairwise` block and the
+  float64 `Add`, `Sub`, `Mul`, `Div`, `Sqrt` kernels (#30; `Max`/`Min` kernels on
+  those architectures remain open).
+
 ## License
 
 BSD-3-Clause. © The go-simd authors.
