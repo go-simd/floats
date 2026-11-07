@@ -1,10 +1,10 @@
-//go:build !amd64 && !arm64
+//go:build !amd64 && !arm64 && !s390x && !ppc64le && !loong64 && !riscv64
 
 package floats
 
-// No kernel on this architecture yet: the portable loops, which the compiler
-// already vectorises where it can. A kernel is added when it is measured faster
-// on real silicon (the dispatch rule of this library).
+// No kernel on this architecture: the portable loops, which the compiler
+// already vectorises where it can. (s390x, ppc64le, loong64 and riscv64 have
+// kernels in lanes_<arch>.go.)
 
 func add(dst, a, b []float64)                      { addRef(dst, a, b) }
 func sub(dst, a, b []float64)                      { subRef(dst, a, b) }
