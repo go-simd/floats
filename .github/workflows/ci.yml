@@ -27,9 +27,12 @@ jobs:
       # Fuzz targets run over their seed corpus deterministically (no -fuzz, no
       # time box, no flake); randomized time-boxed fuzzing runs nightly in fuzz.yml.
       - run: go test -run '^Fuzz' ./...
-      # The NumPy comparison tool is a module of its own (bench/numpycmp), so
-      # the root `./...` above does not cover it.
-      - run: cd bench/numpycmp && go vet ./... && go test ./...
+      # The refbench module (bench/perf) is a module of its own, so the root
+      # `./...` above does not cover it. Its CI mode (no Python, no timing):
+      # allocation counts equal docs/perf.json, docs/perf-table.md is what
+      # perf.json generates, every public function has a case or an entry in
+      # docs/perf-exempt.md.
+      - run: cd bench/perf && go vet ./... && go test -count=1 ./...
   # macOS and Windows.
   #
   # A fleet audit of the 601 repositories holding Go code found the OS axis to

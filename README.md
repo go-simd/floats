@@ -301,9 +301,17 @@ the loop callers write by hand (`y[i] += alpha*x[i]`, …), single core:
 **`Mul`, `Axpby3`, `Clamp`, `MaxAbs` against NumPy 2.5.4**, measured on
 2026-11-01 on the M4 Max (Python 3.12.12, `python -m timeit`), one core, median
 ns/op of 9 interleaved rounds (a Go benchmark run, then NumPy's, for every row),
-1-minute load 2.7. The tool is `bench/numpycmp` (`go test -c -o floats.test`,
-then `go run ./bench/numpycmp --binary ../../floats.test`); it refuses to run at
-a load of 8 or above. NumPy statements: `np.multiply(a, b, out=d)`,
+1-minute load 2.7, with the former `bench/numpycmp` tool (retired: it compared
+Go's mean ns/op with `timeit`'s best of 5, two statistics in one ratio). The
+tool is now [refbench](https://github.com/go-scikit/refbench) in `bench/perf`: every public function
+against NumPy 2.5.4 (pinned in `bench/perf/refs.txt`), calibrated loops timed in
+their own process, rounds alternating, the same input bytes on both sides
+(`go test -run TestDataHash -floats.hash` compares their SHA-256), the median
+and quartiles, refusing at a 1-minute load of 8 or above;
+`docs/perf-table.md` is generated from `docs/perf.json`, and **its timing is
+deferred** (load about 33 when it was migrated, allocation counts only).
+`cd bench/perf && go test -run TestPerf .` checks allocations, the table and
+that every public function has a case. NumPy statements of the table below: `np.multiply(a, b, out=d)`,
 `d[:] = 0.5*a - 1.5*b + 2.5*c`, `np.clip(a, lo, hi, out=d)`, `np.abs(a).max()`.
 
 | op | n | `floats` | Go loop | NumPy | vs Go loop | vs NumPy |
