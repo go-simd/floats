@@ -15,7 +15,7 @@
 // DOUBLE_pairwise_sum are two four-lane registers X0 = r0..r3 and X1 = r4..r7,
 // loaded from a[0:8] and then added to each following block of eight, so every
 // lane receives exactly the additions of the scalar r[j]. The lanes are moved to
-// the scalar registers F0..F7 and folded ((r0+r1)+(r2+r3)) + ((r4+r5)+(r6+r7));
+// the scalar registers F8..F15 and folded ((r0+r1)+(r2+r3)) + ((r4+r5)+(r6+r7));
 // the leftover n % 8 elements are added to the result one at a time, as NumPy
 // does.
 //
@@ -117,17 +117,20 @@ func pwBlockKernel() *emit.Function {
 	for l := 0; l < 4; l++ {
 		b.Raw("XVMOVQ X0.V[%d], R%d", l, 12+l)
 	}
-	b.Raw("MOVV R12, F0").Raw("MOVV R13, F1").Raw("MOVV R14, F2").Raw("MOVV R15, F3")
+	// F<n> is the low lane of X<n>: the lanes of X0 and X1 go to F8..F15, which
+	// alias the unused X8..X15, never to F0/F1 (that would clobber X0/X1 before
+	// X1's lanes are read).
+	b.Raw("MOVV R12, F8").Raw("MOVV R13, F9").Raw("MOVV R14, F10").Raw("MOVV R15, F11")
 	for l := 0; l < 4; l++ {
 		b.Raw("XVMOVQ X1.V[%d], R%d", l, 12+l)
 	}
-	b.Raw("MOVV R12, F4").Raw("MOVV R13, F5").Raw("MOVV R14, F6").Raw("MOVV R15, F7")
-	b.Raw("ADDD F1, F0").Raw("ADDD F3, F2").Raw("ADDD F2, F0"). // (r0+r1)+(r2+r3)
-									Raw("ADDD F5, F4").Raw("ADDD F7, F6").Raw("ADDD F6, F4"). // (r4+r5)+(r6+r7)
-									Raw("ADDD F4, F0")
+	b.Raw("MOVV R12, F12").Raw("MOVV R13, F13").Raw("MOVV R14, F14").Raw("MOVV R15, F15")
+	b.Raw("ADDD F9, F8").Raw("ADDD F11, F10").Raw("ADDD F10, F8"). // (r0+r1)+(r2+r3)
+									Raw("ADDD F13, F12").Raw("ADDD F15, F14").Raw("ADDD F14, F12"). // (r4+r5)+(r6+r7)
+									Raw("ADDD F12, F8")
 	b.Label("ptail").Raw("BEQ R5, pdone").
-		Raw("MOVD 0(R4), F1").Raw("ADDD F1, F0").
+		Raw("MOVD 0(R4), F1").Raw("ADDD F1, F8").
 		Raw("ADDV $8, R4").Raw("ADDV $-1, R5").Raw("JMP ptail")
-	b.Label("pdone").StoreRet("F0", "ret").Ret()
+	b.Label("pdone").StoreRet("F8", "ret").Ret()
 	return b.Func()
 }
