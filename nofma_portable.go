@@ -13,4 +13,3 @@ func axpby3NoFMA(dst []float64, alpha float64, a []float64, beta float64, b []fl
 func axpyDiffNoFMA(dst, a []float64, f float64, b, c []float64) {
 	axpyDiffNoFMARef(dst, a, f, b, c)
 }
-func pairwiseBlock(a []float64) float64 { return pairwiseBlockRef(a) }
