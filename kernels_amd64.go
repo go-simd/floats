@@ -115,7 +115,7 @@ func mul(dst, a, b []float64) {
 		mulAVX2(dst, a, b)
 		return
 	}
-	mulRef(dst, a, b)
+	mulSSE2(dst, a, b)
 }
 
 func axpby3(dst []float64, alpha float64, a []float64, beta float64, b []float64, gamma float64, c []float64) {
