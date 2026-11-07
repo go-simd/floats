@@ -76,6 +76,7 @@ func pySetup(f32 bool) string {
 type data struct {
 	a, b, c, d, lo, hi []float64
 	a32, b32           []float32
+	hi32, d32          []float32 // positive inputs and the output of the float32 Exp/Log
 }
 
 func newData(n int) *data {
@@ -84,8 +85,9 @@ func newData(n int) *data {
 		*dst = gen(n, params[i].p, params[i].lo, params[i].hi)
 	}
 	x.a32, x.b32 = make([]float32, n), make([]float32, n)
+	x.hi32, x.d32 = make([]float32, n), make([]float32, n)
 	for i := range x.a {
-		x.a32[i], x.b32[i] = float32(x.a[i]), float32(x.b[i])
+		x.a32[i], x.b32[i], x.hi32[i] = float32(x.a[i]), float32(x.b[i]), float32(x.hi[i])
 	}
 	return x
 }
@@ -150,6 +152,10 @@ var ops = []op{
 	{"AxpyDot", refbench.ParityTolerance, false, args + "(np.add(d, 0.5*a, out=d), np.dot(d, b))", func(x *data) func() { return func() { sink = floats.AxpyDot(0.5, x.a, x.d, x.b) } }},
 	{"Scale", refbench.ParityExact, false, args + "np.multiply(d, 1.0, out=d)", func(x *data) func() { return func() { floats.Scale(1.0, x.d) } }},
 	{"Mul", refbench.ParityExact, false, args + "np.multiply(a, b, out=d)", func(x *data) func() { return func() { floats.Mul(x.d, x.a, x.b) } }},
+	{"Exp", refbench.ParityTolerance, false, args + "np.exp(a, out=d)", func(x *data) func() { return func() { floats.Exp(x.d, x.a) } }},
+	{"Log", refbench.ParityTolerance, false, args + "np.log(hi, out=d)", func(x *data) func() { return func() { floats.Log(x.d, x.hi) } }},
+	{"Float32Exp", refbench.ParityTolerance, true, args + "np.exp(a, out=d)", func(x *data) func() { return func() { floats.Float32Exp(x.d32, x.a32) } }},
+	{"Float32Log", refbench.ParityTolerance, true, args + "np.log(hi, out=d)", func(x *data) func() { return func() { floats.Float32Log(x.d32, x.hi32) } }},
 	{"Add", refbench.ParityExact, false, args + "np.add(a, b, out=d)", func(x *data) func() { return func() { floats.Add(x.d, x.a, x.b) } }},
 	{"Sub", refbench.ParityExact, false, args + "np.subtract(a, b, out=d)", func(x *data) func() { return func() { floats.Sub(x.d, x.a, x.b) } }},
 	{"Div", refbench.ParityExact, false, args + "np.divide(a, b, out=d)", func(x *data) func() { return func() { floats.Div(x.d, x.a, x.b) } }},
