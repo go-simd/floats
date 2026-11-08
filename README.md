@@ -187,6 +187,8 @@ mnemonic its comment claims. Nothing allocates. Timing against NumPy is deferred
 | `XpbyNoFMA(x, beta, y)` | `y[i] = x[i] + beta*y[i]` (`x + beta*y`) |
 | `Axpby3NoFMA(dst, alpha, a, beta, b, gamma, c)` | `dst[i] = alpha*a[i] + beta*b[i] + gamma*c[i]`, left to right |
 | `AxpyDiffNoFMA(dst, a, f, b, c)` | `dst[i] = a[i] + f*(b[i] - c[i])` — the differential-evolution mutation (rand/1, best/1; `dst = a = c = b` gives `b += f*(x - b)` of rand-to-best/1) |
+| `Polyval(dst, x, c)` | `dst[i] = polyval(x[i], c)`, `numpy.polynomial.polynomial.polyval(x, c, tensor=False)`: `c0 = c[-1] + x*0; c0 = c[-i] + c0*x` |
+| `Chebval(dst, x, c)` | `dst[i] = chebval(x[i], c)`, `numpy.polynomial.chebyshev.chebval(x, c, tensor=False)`: Clenshaw, `x2 = 2*x`, `c0 = c[-i] - c1; c1 = tmp + c1*x2`, then `c0 + c1*x` |
 
 `Axpy`, `Xpby` and `Axpby3` are **fused**: one rounding per element, which is the
 more accurate result and what BLAS does, but not what NumPy does. NumPy never
@@ -437,6 +439,15 @@ and `SumSqDiff` keep their `VFMADB` VX kernels (not measured as losses on z15),
 and `Distance`/`CosineSimilarity` build on those and are unchanged; float32 uses
 the lane-blocked scalar reference as before. Correctness on s390x is validated
 under QEMU *and* on real z15 silicon.
+
+## Changes in v0.12.0
+
+- `Polyval(dst, x, c)` and `Chebval(dst, x, c)`: Horner and Clenshaw evaluation
+  of one series at many points, in the order of `numpy.polynomial` 2.5.4
+  (`polynomial/polynomial.py` `polyval`, `polynomial/chebyshev.py` `chebval`),
+  unfused, bit-identical to NumPy's result (fixtures built in a linux/amd64
+  container). AVX2, SSE2 (no AVX2+FMA) and NEON kernels; ppc64le, s390x, riscv64,
+  loong64 and the 32-bit targets run the portable loop (#30).
 
 ## Changes in v0.10.0
 
