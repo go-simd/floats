@@ -1,6 +1,7 @@
 package floats
 
 import (
+	_ "embed"
 	"encoding/binary"
 	"math"
 	"math/rand/v2"
@@ -159,16 +160,19 @@ func TestPolyvalChebvalPanicsAndEmpty(t *testing.T) {
 
 const pvFixture = "testdata/polyval_np.bin"
 
+// pvFixtureData is embedded: the emulated CI lanes run the test binary away from
+// the source tree.
+//
+//go:embed testdata/polyval_np.bin
+var pvFixtureData []byte
+
 // TestPolyvalChebvalNumPy compares Polyval and Chebval, and the loops, with the
 // bits NumPy's polyval and chebval returned for the same inputs. The loops write
 // every product through float64(...), so they are unfused; if NumPy had fused
 // (arm64 wheels may), the loop and the fixture would disagree here, which is how
 // the fixtures are shown FMA-free.
 func TestPolyvalChebvalNumPy(t *testing.T) {
-	raw, err := os.ReadFile(pvFixture)
-	if err != nil {
-		t.Fatal(err)
-	}
+	raw := pvFixtureData
 	w := make([]uint64, len(raw)/8)
 	for i := range w {
 		w[i] = binary.LittleEndian.Uint64(raw[8*i:])
