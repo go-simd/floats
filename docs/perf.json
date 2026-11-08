@@ -1,11 +1,11 @@
 {
   "schema": 1,
   "status": "deferred",
-  "date": "2026-11-07T22:08:47+01:00",
-  "commit": "k1b",
+  "date": "2026-11-08T09:38:37+01:00",
+  "commit": "k2",
   "repo": "go-simd/floats",
   "go_version": "go1.27.3",
-  "machine": "darwin/arm64 (deferred: 1-minute load 16)",
+  "machine": "darwin/arm64 (deferred: 1-minute load 19)",
   "ref_versions": {
     "numpy": "2.5.4 (refs.txt)"
   },
@@ -614,6 +614,42 @@
     {
       "name": "AxpyDiffNoFMA/1000",
       "func": "AxpyDiffNoFMA",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Polyval/1000",
+      "func": "Polyval",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Chebval/1000",
+      "func": "Chebval",
       "reference": "numpy",
       "parity": "exact",
       "allocs": 0,
@@ -1242,6 +1278,42 @@
       "ratio": 0
     },
     {
+      "name": "Polyval/100000",
+      "func": "Polyval",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Chebval/100000",
+      "func": "Chebval",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
       "name": "Dot/1000000",
       "func": "Dot",
       "reference": "numpy",
@@ -1838,6 +1910,42 @@
     {
       "name": "AxpyDiffNoFMA/1000000",
       "func": "AxpyDiffNoFMA",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Polyval/1000000",
+      "func": "Polyval",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Chebval/1000000",
+      "func": "Chebval",
       "reference": "numpy",
       "parity": "exact",
       "allocs": 0,

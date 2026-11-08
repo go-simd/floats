@@ -168,7 +168,15 @@ var ops = []op{
 	{"XpbyNoFMA", refbench.ParityExact, false, args + "np.add(a, 0.5*d, out=d)", func(x *data) func() { return func() { floats.XpbyNoFMA(x.a, 0.5, x.d) } }},
 	{"Axpby3NoFMA", refbench.ParityExact, false, args + "np.add(0.5*a + -1.5*b, 2.5*c, out=d)", func(x *data) func() { return func() { floats.Axpby3NoFMA(x.d, 0.5, x.a, -1.5, x.b, 2.5, x.c) } }},
 	{"AxpyDiffNoFMA", refbench.ParityExact, false, args + "np.add(a, 0.5*(b - c), out=d)", func(x *data) func() { return func() { floats.AxpyDiffNoFMA(x.d, x.a, 0.5, x.b, x.c) } }},
+	{"Polyval", refbench.ParityExact, false, args + "np.polynomial.polynomial.polyval(a, " + seriesPy + ", tensor=False)", func(x *data) func() { return func() { floats.Polyval(x.d, x.a, series) } }},
+	{"Chebval", refbench.ParityExact, false, args + "np.polynomial.chebyshev.chebval(a, " + seriesPy + ", tensor=False)", func(x *data) func() { return func() { floats.Chebval(x.d, x.a, series) } }},
 }
+
+// series: eight coefficients, evaluated at the n points of a (NumPy's polyval and
+// chebval with tensor=False return a new array; Go writes into d).
+var series = []float64{0.5, -1.25, 0.75, 2, -0.125, 0.0625, -3, 1.5}
+
+const seriesPy = "[0.5, -1.25, 0.75, 2, -0.125, 0.0625, -3, 1.5]"
 
 // worker is the one long-lived NumPy process, started at the first timed call.
 var (
