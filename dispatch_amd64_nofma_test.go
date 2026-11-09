@@ -41,6 +41,15 @@ func TestDispatchAMD64NoFMA(t *testing.T) {
 			AxpyDiffNoFMA(got, a, 0.9, b, c)
 			checkSame(t, label+" axpyDiffNoFMA", got, want, n, 0)
 
+			if n > 0 {
+				x := append(append([]float64(nil), a...), c...)
+				y = append(y[:0], b...)
+				w = append(w[:0], b...)
+				axpyRowsNoFMARef([]float64{0.3, -1.7}, x, n, w)
+				AxpyRowsNoFMA([]float64{0.3, -1.7}, x, n, y)
+				checkSame(t, label+" axpyRowsNoFMA", y, w, n, 0)
+			}
+
 			if g, w := SumPairwise(a), pwInit+pairwiseRef(a); math.Float64bits(g) != math.Float64bits(w) {
 				t.Fatalf("%s SumPairwise n=%d: %016x vs %016x", label, n, math.Float64bits(g), math.Float64bits(w))
 			}

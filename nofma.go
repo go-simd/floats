@@ -106,3 +106,45 @@ func axpyDiffNoFMARef(dst, a []float64, f float64, b, c []float64) {
 		dst[i] = v + float64(f*d)
 	}
 }
+
+// AxpyRowsNoFMA applies len(a) unfused AXPY updates to y in one pass: for
+// j < len(y),
+//
+//	y[j] = (((y[j] + a[0]*x[0*ldx+j]) + a[1]*x[1*ldx+j]) + ...) + a[r-1]*x[(r-1)*ldx+j]
+//
+// with r = len(a), every product rounded before its addition and the rows added
+// in increasing order. The result is bit-identical to r successive
+// AxpyNoFMA(a[k], x[k*ldx:k*ldx+len(y)], y) calls, but a block of y stays in
+// registers across all r rows, so y is loaded and stored once instead of r times.
+// It is the row of an exact matrix product C = A*B in i-k-j order: pass
+// a = A[i,:], x = B (row-major, ldx = its row stride), y = C[i,:], and the entry
+// is the left-to-right sum in increasing k that NumPy's matmul loop (and any
+// reference that does not fuse) computes.
+//
+// x holds row k at x[k*ldx:]; it must not overlap y. It panics if ldx < 0 or if
+// x is shorter than (len(a)-1)*ldx + len(y). With len(a) == 0 or len(y) == 0 it
+// does nothing (and checks nothing).
+func AxpyRowsNoFMA(a []float64, x []float64, ldx int, y []float64) {
+	r, n := len(a), len(y)
+	if r == 0 || n == 0 {
+		return
+	}
+	if ldx < 0 {
+		panic("floats: AxpyRowsNoFMA: ldx < 0")
+	}
+	// (r-1)*ldx + n <= len(x), without overflow on 32-bit ints.
+	if len(x) < n || (r > 1 && ldx > (len(x)-n)/(r-1)) {
+		panic("floats: AxpyRowsNoFMA: x shorter than (len(a)-1)*ldx + len(y)")
+	}
+	axpyRowsNoFMA(a, x, ldx, y)
+}
+
+func axpyRowsNoFMARef(a []float64, x []float64, ldx int, y []float64) {
+	for j := range y {
+		s := y[j]
+		for k, ak := range a {
+			s = s + float64(ak*x[k*ldx+j])
+		}
+		y[j] = s
+	}
+}

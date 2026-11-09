@@ -54,3 +54,35 @@ func TestNoFMAGuardPages(t *testing.T) {
 		}
 	}
 }
+
+// TestAxpyRowsNoFMAGuardPages: x and y end exactly at an inaccessible page (and
+// start right after one), every width 0..130 and row counts 1..5: a block load or
+// store past either end, in any of the width stages, would fault.
+func TestAxpyRowsNoFMAGuardPages(t *testing.T) {
+	px, py := guardedPage(t), guardedPage(t)
+	for n := 0; n <= 130; n++ {
+		for r := 1; r <= 3; r++ { // r*n <= 390 elements: inside one 4 KiB guarded page
+			for _, atEnd := range []bool{true, false} {
+				cut := func(p []float64, m int) []float64 {
+					if atEnd {
+						return p[len(p)-m:]
+					}
+					return p[:m]
+				}
+				x, y := cut(px, (r-1)*n+n), cut(py, n)
+				for i := range x {
+					x[i] = float64(i)*0.37 - 11
+				}
+				a := []float64{0.25, -2, 1.5, 3, -0.5}[:r]
+				y0 := make([]float64, n)
+				for i := range y0 {
+					y0[i] = 1 / float64(i+1)
+				}
+				want := rowsWant(a, x, n, y0)
+				copy(y, y0)
+				AxpyRowsNoFMA(a, x, n, y)
+				checkSame(t, "AxpyRowsNoFMA guard", y, want, n, 0)
+			}
+		}
+	}
+}

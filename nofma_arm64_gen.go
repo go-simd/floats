@@ -31,6 +31,7 @@ func main() {
 	f.Add(xpbyNoFMA().Func())
 	f.Add(axpby3NoFMA().Func())
 	f.Add(axpyDiffNoFMA().Func())
+	f.Add(axpyRowsNoFMA().Func())
 	f.Add(pwBlock().Func())
 	if err := os.WriteFile("nofma_arm64.s", []byte(f.String()), 0o644); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -199,5 +200,69 @@ func pwBlock() *arm64.Builder {
 		Raw("FADDD F9, F8, F8").
 		Raw("ADD $1, R3, R3").Raw("B tail").
 		Label("done").StoreRet("F8", "ret").Ret()
+	return b
+}
+
+// axpyRowsNoFMA: for j < len(y), y[j] = (((y[j] + a[0]*x[0*ldx+j]) + a[1]*x[1*ldx+j]) + ...),
+// every product rounded before its add, rows in increasing order: the bits of
+// len(a) successive axpyNoFMA calls, with a block of y held in registers across
+// ALL the rows (loaded and stored once). The caller guarantees len(a) >= 1 and
+// len(y) >= 1 and that x holds (len(a)-1)*ldx + len(y) elements.
+//
+// Blocks of 16, 4, 2 and 1 columns. In a block of w vector registers V0..V(w-1)
+// are the accumulators, V8.. the products, V31 the broadcast a[k]. R0 = a, R1 =
+// len(a), R7 = x, R9 = 8*ldx, R2 = y, R3 = len(y), R4 = j.
+func axpyRowsNoFMA() *arm64.Builder {
+	sig := abi.LayoutArgs(
+		[]abi.Arg{abi.Slice("a"), abi.Slice("x"), abi.Scalar("ldx", abi.Int64), abi.Slice("y")}, nil)
+	b := arm64.NewFunc("axpyRowsNoFMANEON", sig, 0)
+	b.LoadArg("a_base", "R0").LoadArg("a_len", "R1").LoadArg("x_base", "R7").LoadArg("ldx", "R9").
+		LoadArg("y_base", "R2").LoadArg("y_len", "R3").
+		Raw("LSL $3, R9, R9").Raw("MOVD $0, R4")
+	stages := []struct {
+		label, next string
+		cols, regs  int
+	}{
+		{"rloop", "rloop4", 16, 8},
+		{"rloop4", "rloop2", 4, 2},
+		{"rloop2", "rloop1", 2, 1},
+	}
+	for _, s := range stages {
+		b.Label(s.label).
+			Raw(fmt.Sprintf("ADD $%d, R4, R5", s.cols)).Raw("CMP R3, R5").Raw("BGT " + s.next).
+			Raw("ADD R4<<3, R2, R6").Raw("MOVD R6, R13")
+		for q := 0; q < s.regs; q += 4 {
+			n := min(4, s.regs-q)
+			b.Raw(fmt.Sprintf("VLD1.P %d(R13), %s", 16*n, vregs(q, n, "D2")))
+		}
+		b.Raw("ADD R4<<3, R7, R10").Raw("MOVD R0, R11").Raw("MOVD R1, R12").
+			Label(s.label + "k").
+			Raw("FMOVD (R11), F31").Raw("VDUP V31.D[0], V31.D2").Raw("MOVD R10, R14")
+		for q := 0; q < s.regs; q += 4 {
+			n := min(4, s.regs-q)
+			b.Raw(fmt.Sprintf("VLD1.P %d(R14), %s", 16*n, vregs(8+q, n, "D2")))
+		}
+		for k := 0; k < s.regs; k++ {
+			b.Raw(fmt.Sprintf("VFMUL V31.D2, V%d.D2, V%d.D2", 8+k, 8+k)). // t = a[k]*x
+											Raw(fmt.Sprintf("VFADD V%d.D2, V%d.D2, V%d.D2", 8+k, k, k)) // acc = acc + t
+		}
+		b.Raw("ADD R9, R10, R10").Raw("ADD $8, R11, R11").Raw("SUBS $1, R12, R12").Raw("BNE " + s.label + "k")
+		for q := 0; q < s.regs; q += 4 {
+			n := min(4, s.regs-q)
+			b.Raw(fmt.Sprintf("VST1.P %s, 16*%d(R6)", vregs(q, n, "D2"), n))
+		}
+		b.Raw(fmt.Sprintf("ADD $%d, R4, R4", s.cols)).Raw("B " + s.label)
+	}
+	b.Label("rloop1").
+		Raw("CMP R3, R4").Raw("BGE rdone").
+		Raw("FMOVD (R2)(R4<<3), F0").
+		Raw("ADD R4<<3, R7, R10").Raw("MOVD R0, R11").Raw("MOVD R1, R12").
+		Label("rloop1k").
+		Raw("FMOVD (R11), F31").Raw("FMOVD (R10), F8").
+		Raw("FMULD F31, F8, F8").Raw("FADDD F8, F0, F0").
+		Raw("ADD R9, R10, R10").Raw("ADD $8, R11, R11").Raw("SUBS $1, R12, R12").Raw("BNE rloop1k").
+		Raw("FMOVD F0, (R2)(R4<<3)").
+		Raw("ADD $1, R4, R4").Raw("B rloop1").
+		Label("rdone").Ret()
 	return b
 }

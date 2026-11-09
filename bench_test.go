@@ -392,3 +392,29 @@ func sizeName(n int) string {
 	}
 	return "?"
 }
+
+// BenchmarkAxpyRowsNoFMA times one row of an exact n x n product (n = 100, the
+// BFGS shape): AxpyRowsNoFMA against 100 AxpyNoFMA calls, same bits.
+func BenchmarkAxpyRowsNoFMA(b *testing.B) {
+	const n = 100
+	rng := rand.New(rand.NewSource(1))
+	a, x, y := make([]float64, n), make([]float64, n*n), make([]float64, n)
+	for i := range a {
+		a[i] = rng.NormFloat64() * 1e-3
+	}
+	for i := range x {
+		x[i] = rng.NormFloat64()
+	}
+	b.Run("rows", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			AxpyRowsNoFMA(a, x, n, y)
+		}
+	})
+	b.Run("axpy-loop", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			for k, ak := range a {
+				AxpyNoFMA(ak, x[k*n:k*n+n], y)
+			}
+		}
+	})
+}

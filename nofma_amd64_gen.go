@@ -33,6 +33,7 @@ func main() {
 	f.Add(xpbyNoFMA().Func())
 	f.Add(axpby3NoFMA().Func())
 	f.Add(axpyDiffNoFMA().Func())
+	f.Add(axpyRowsNoFMA().Func())
 	f.Add(pwBlock().Func())
 	if err := os.WriteFile("nofma_amd64.s", []byte(f.String()), 0o644); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -209,5 +210,63 @@ func pwBlock() *amd64.Builder {
 		Raw("VADDSD (AX)(DI*8), X0, X0").
 		Raw("ADDQ $1, DI").Raw("JMP tail").
 		Label("done").StoreRet("X0", "ret").Ret()
+	return b
+}
+
+// axpyRowsNoFMA: for j < len(y), y[j] = (((y[j] + a[0]*x[0*ldx+j]) + a[1]*x[1*ldx+j]) + ...),
+// every product rounded before its add (VMULPD then VADDPD, no VFMADD), rows in
+// increasing order: the bits of len(a) successive axpyNoFMA calls, with a block of
+// y held in registers across ALL the rows (loaded and stored once). The caller
+// guarantees len(a) >= 1 and len(y) >= 1 and that x holds (len(a)-1)*ldx +
+// len(y) elements.
+//
+// Blocks of 32, 8, 4 and 1 columns: Y0..Y(w-1) accumulate, Y8..Y14 take the
+// products (rotating), Y15 is the broadcast a[k]. DX = a, BX = len(a), SI = x,
+// R9 = 8*ldx, DI = y, CX = len(y), AX = j.
+func axpyRowsNoFMA() *amd64.Builder {
+	sig := abi.LayoutArgs(
+		[]abi.Arg{abi.Slice("a"), abi.Slice("x"), abi.Scalar("ldx", abi.Int64), abi.Slice("y")}, nil)
+	b := amd64.NewFunc("axpyRowsNoFMAAVX2", sig, 0)
+	b.LoadArg("a_base", "DX").LoadArg("a_len", "BX").LoadArg("x_base", "SI").LoadArg("ldx", "R9").
+		LoadArg("y_base", "DI").LoadArg("y_len", "CX").
+		Raw("SHLQ $3, R9").Raw("XORQ AX, AX")
+	stages := []struct {
+		label, next string
+		cols, regs  int
+	}{
+		{"rloop", "rloop8", 32, 8},
+		{"rloop8", "rloop4", 8, 2},
+		{"rloop4", "rloop1", 4, 1},
+	}
+	for _, s := range stages {
+		b.Label(s.label).
+			Raw("LEAQ %d(AX), R8", s.cols).Raw("CMPQ R8, CX").Raw("JGT " + s.next)
+		for k := 0; k < s.regs; k++ {
+			b.Raw("VMOVUPD %d(DI)(AX*8), Y%d", 32*k, k)
+		}
+		b.Raw("LEAQ (SI)(AX*8), R10").Raw("MOVQ DX, R11").Raw("MOVQ BX, R12").
+			Label(s.label + "k").
+			Raw("VBROADCASTSD (R11), Y15")
+		for k := 0; k < s.regs; k++ {
+			t := 8 + k%7
+			b.Raw("VMULPD %d(R10), Y15, Y%d", 32*k, t).
+				Raw("VADDPD Y%d, Y%d, Y%d", t, k, k)
+		}
+		b.Raw("ADDQ R9, R10").Raw("ADDQ $8, R11").Raw("SUBQ $1, R12").Raw("JNE " + s.label + "k")
+		for k := 0; k < s.regs; k++ {
+			b.Raw("VMOVUPD Y%d, %d(DI)(AX*8)", k, 32*k)
+		}
+		b.Raw("ADDQ $%d, AX", s.cols).Raw("JMP " + s.label)
+	}
+	b.Label("rloop1").
+		Raw("CMPQ AX, CX").Raw("JGE rdone").
+		Raw("VMOVSD (DI)(AX*8), X0").
+		Raw("LEAQ (SI)(AX*8), R10").Raw("MOVQ DX, R11").Raw("MOVQ BX, R12").
+		Label("rloop1k").
+		Raw("VMOVSD (R10), X8").Raw("VMULSD (R11), X8, X8").Raw("VADDSD X8, X0, X0").
+		Raw("ADDQ R9, R10").Raw("ADDQ $8, R11").Raw("SUBQ $1, R12").Raw("JNE rloop1k").
+		Raw("VMOVSD X0, (DI)(AX*8)").
+		Raw("ADDQ $1, AX").Raw("JMP rloop1").
+		Label("rdone").Raw("VZEROUPPER").Ret()
 	return b
 }
