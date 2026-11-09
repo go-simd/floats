@@ -61,7 +61,7 @@ func TestNoFMAGuardPages(t *testing.T) {
 func TestAxpyRowsNoFMAGuardPages(t *testing.T) {
 	px, py := guardedPage(t), guardedPage(t)
 	for n := 0; n <= 130; n++ {
-		for r := 1; r <= 5; r++ {
+		for r := 1; r <= 3; r++ { // r*n <= 390 elements: inside one 4 KiB guarded page
 			for _, atEnd := range []bool{true, false} {
 				cut := func(p []float64, m int) []float64 {
 					if atEnd {
