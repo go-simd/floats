@@ -6,11 +6,21 @@ package floats
 // (nofma_arm64_gen.go) into nofma_arm64.s: VFMUL, VFADD, VFSUB and VFADDP, no
 // VFMLA. NEON is the ARMv8-A baseline, so there is no runtime gate. The callers
 // pass every slice already sliced to the common length; pwBlockNEON requires
-// 8 <= len(a) <= 128.
+// 8 <= len(a) <= 128. No kernel keeps a pointer: every stub is go:noescape.
+//
+//go:noescape
 func axpyNoFMANEON(alpha float64, x, y []float64)
+
+//go:noescape
 func xpbyNoFMANEON(beta float64, x, y []float64)
+
+//go:noescape
 func axpby3NoFMANEON(dst []float64, alpha float64, a []float64, beta float64, b []float64, gamma float64, c []float64)
+
+//go:noescape
 func axpyDiffNoFMANEON(dst, a []float64, f float64, b, c []float64)
+
+//go:noescape
 func pwBlockNEON(a []float64) float64
 
 func axpyNoFMA(alpha float64, x, y []float64) { axpyNoFMANEON(alpha, x, y) }

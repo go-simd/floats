@@ -28,8 +28,14 @@ import "golang.org/x/sys/cpu"
 //     naive f32 loop.
 //
 // Only the three f32 kernels are generated into kernels_ppc64le.s.
+//
+//go:noescape
 func dot32VSX(a, b []float32) float32
+
+//go:noescape
 func sum32VSX(a []float32) float32
+
+//go:noescape
 func sumSqDiff32VSX(a, b []float32) float32
 
 // hasVSX gates the f32 VSX kernels. They use only ISA-2.06 VSX ops (the ppc64le

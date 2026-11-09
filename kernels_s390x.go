@@ -22,7 +22,11 @@ package floats
 // We deliberately do NOT use the lane-blocked reference (reference.go) for the
 // s390x Dot: its multi-lane fold defeats the gc autovectorizer, so the plain
 // left-to-right loop is the faster scalar form (same rationale as ppc64le).
+//
+//go:noescape
 func sumVX(a []float64) float64
+
+//go:noescape
 func sumSqDiffVX(a, b []float64) float64
 
 func dot(a, b []float64) float64 {

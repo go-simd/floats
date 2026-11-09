@@ -7,20 +7,43 @@ package floats
 // sliced to the common length. They use no FMA; they share the gate of the other
 // AVX2 kernels (hasAVX2FMA, kernels_amd64.go), and on a CPU without AVX2+FMA
 // they run the SSE2 kernels of sse2_amd64.s (sse2_amd64_gen.go; SSE2 is the amd64
-// baseline), with identical results on the portable path.
+// baseline), with identical results on the portable path. No kernel keeps a
+// pointer: every stub is go:noescape.
+//
+//go:noescape
 func addAVX2(dst, a, b []float64)
+
+//go:noescape
 func subAVX2(dst, a, b []float64)
+
+//go:noescape
 func divAVX2(dst, a, b []float64)
+
+//go:noescape
 func sqrtAVX2(dst, src []float64)
+
+//go:noescape
 func clampScalarAVX2(dst, v []float64, lo, hi float64)
 
 // The SSE2 kernels: the same signatures, two doubles per XMM register. Mul is
 // mulSSE2, dispatched in kernels_amd64.go.
+//
+//go:noescape
 func addSSE2(dst, a, b []float64)
+
+//go:noescape
 func subSSE2(dst, a, b []float64)
+
+//go:noescape
 func mulSSE2(dst, a, b []float64)
+
+//go:noescape
 func divSSE2(dst, a, b []float64)
+
+//go:noescape
 func sqrtSSE2(dst, src []float64)
+
+//go:noescape
 func clampScalarSSE2(dst, v []float64, lo, hi float64)
 
 func add(dst, a, b []float64) {
