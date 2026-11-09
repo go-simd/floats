@@ -1,11 +1,11 @@
 {
   "schema": 1,
   "status": "deferred",
-  "date": "2026-11-08T09:38:37+01:00",
-  "commit": "k2",
+  "date": "2026-11-09T20:45:04+01:00",
+  "commit": "",
   "repo": "go-simd/floats",
   "go_version": "go1.27.3",
-  "machine": "darwin/arm64 (deferred: 1-minute load 19)",
+  "machine": "darwin/arm64, 16 CPUs",
   "ref_versions": {
     "numpy": "2.5.4 (refs.txt)"
   },
@@ -614,6 +614,24 @@
     {
       "name": "AxpyDiffNoFMA/1000",
       "func": "AxpyDiffNoFMA",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "AxpyRowsNoFMA/1000",
+      "func": "AxpyRowsNoFMA",
       "reference": "numpy",
       "parity": "exact",
       "allocs": 0,
@@ -1278,6 +1296,24 @@
       "ratio": 0
     },
     {
+      "name": "AxpyRowsNoFMA/100000",
+      "func": "AxpyRowsNoFMA",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
       "name": "Polyval/100000",
       "func": "Polyval",
       "reference": "numpy",
@@ -1910,6 +1946,24 @@
     {
       "name": "AxpyDiffNoFMA/1000000",
       "func": "AxpyDiffNoFMA",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "AxpyRowsNoFMA/1000000",
+      "func": "AxpyRowsNoFMA",
       "reference": "numpy",
       "parity": "exact",
       "allocs": 0,
