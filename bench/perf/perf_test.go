@@ -168,6 +168,11 @@ var ops = []op{
 	{"XpbyNoFMA", refbench.ParityExact, false, args + "np.add(a, 0.5*d, out=d)", func(x *data) func() { return func() { floats.XpbyNoFMA(x.a, 0.5, x.d) } }},
 	{"Axpby3NoFMA", refbench.ParityExact, false, args + "np.add(0.5*a + -1.5*b, 2.5*c, out=d)", func(x *data) func() { return func() { floats.Axpby3NoFMA(x.d, 0.5, x.a, -1.5, x.b, 2.5, x.c) } }},
 	{"AxpyDiffNoFMA", refbench.ParityExact, false, args + "np.add(a, 0.5*(b - c), out=d)", func(x *data) func() { return func() { floats.AxpyDiffNoFMA(x.d, x.a, 0.5, x.b, x.c) } }},
+	{"AxpyRowsNoFMA", refbench.ParityExact, false, args + "(np.add(d, 0.5*a, out=d), np.add(d, -1.5*b, out=d), np.add(d, 2.5*c, out=d))", func(x *data) func() {
+		rows := append(append(append([]float64(nil), x.a...), x.b...), x.c...)
+		a := []float64{0.5, -1.5, 2.5}
+		return func() { floats.AxpyRowsNoFMA(a, rows, len(x.a), x.d) }
+	}},
 	{"Polyval", refbench.ParityExact, false, args + "np.polynomial.polynomial.polyval(a, " + seriesPy + ", tensor=False)", func(x *data) func() { return func() { floats.Polyval(x.d, x.a, series) } }},
 	{"Chebval", refbench.ParityExact, false, args + "np.polynomial.chebyshev.chebval(a, " + seriesPy + ", tensor=False)", func(x *data) func() { return func() { floats.Chebval(x.d, x.a, series) } }},
 }

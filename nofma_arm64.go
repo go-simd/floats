@@ -32,3 +32,10 @@ func axpby3NoFMA(dst []float64, alpha float64, a []float64, beta float64, b []fl
 func axpyDiffNoFMA(dst, a []float64, f float64, b, c []float64) {
 	axpyDiffNoFMANEON(dst, a, f, b, c)
 }
+
+//go:noescape
+func axpyRowsNoFMANEON(a []float64, x []float64, ldx int, y []float64)
+
+func axpyRowsNoFMA(a []float64, x []float64, ldx int, y []float64) {
+	axpyRowsNoFMANEON(a, x, ldx, y)
+}

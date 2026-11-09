@@ -66,3 +66,14 @@ func pairwiseBlock(a []float64) float64 {
 	}
 	return pairwiseBlockRef(a)
 }
+
+//go:noescape
+func axpyRowsNoFMAAVX2(a []float64, x []float64, ldx int, y []float64)
+
+func axpyRowsNoFMA(a []float64, x []float64, ldx int, y []float64) {
+	if hasAVX2FMA {
+		axpyRowsNoFMAAVX2(a, x, ldx, y)
+		return
+	}
+	axpyRowsNoFMARef(a, x, ldx, y)
+}

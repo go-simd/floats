@@ -33,6 +33,7 @@ func TestKernelsKeepCallerSlicesOnStack(t *testing.T) {
 		Axpby3(d[:], 1, a[:], 2, b[:], 3, c[:])
 		Axpby3NoFMA(d[:], 1, a[:], 2, b[:], 3, c[:])
 		AxpyDiffNoFMA(d[:], a[:], 0.5, b[:], c[:])
+		AxpyRowsNoFMA(c[:4], a[:], 8, d[:8])
 		Polyval(d[:], a[:], c[:4])
 		Chebval(d[:], c[:], b[:4])
 		sink += d[7]

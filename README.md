@@ -186,6 +186,7 @@ mnemonic its comment claims. Nothing allocates. Timing against NumPy is deferred
 | `AxpyNoFMA(alpha, x, y)` | `y[i] = y[i] + alpha*x[i]` (`y + alpha*x`) |
 | `XpbyNoFMA(x, beta, y)` | `y[i] = x[i] + beta*y[i]` (`x + beta*y`) |
 | `Axpby3NoFMA(dst, alpha, a, beta, b, gamma, c)` | `dst[i] = alpha*a[i] + beta*b[i] + gamma*c[i]`, left to right |
+| `AxpyRowsNoFMA(a, x, ldx, y)` | `y[j] = (((y[j] + a[0]*x[j]) + a[1]*x[ldx+j]) + …)`, unfused, rows in increasing order: the bits of `len(a)` `AxpyNoFMA` calls with `y` loaded and stored once — one row of an exact matrix product (2.1× the `AxpyNoFMA` loop at 100×100, M4 Max) |
 | `AxpyDiffNoFMA(dst, a, f, b, c)` | `dst[i] = a[i] + f*(b[i] - c[i])` — the differential-evolution mutation (rand/1, best/1; `dst = a = c = b` gives `b += f*(x - b)` of rand-to-best/1) |
 | `Polyval(dst, x, c)` | `dst[i] = polyval(x[i], c)`, `numpy.polynomial.polynomial.polyval(x, c, tensor=False)`: `c0 = c[-1] + x*0; c0 = c[-i] + c0*x` |
 | `Chebval(dst, x, c)` | `dst[i] = chebval(x[i], c)`, `numpy.polynomial.chebyshev.chebval(x, c, tensor=False)`: Clenshaw, `x2 = 2*x`, `c0 = c[-i] - c1; c1 = tmp + c1*x2`, then `c0 + c1*x` |
