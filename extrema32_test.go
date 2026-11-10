@@ -14,6 +14,12 @@ import (
 
 var nan32 = float32(math.NaN())
 
+// negNaN32 has the sign bit set, like x86's default NaN (0*Inf, Inf-Inf). A kernel
+// that orders the bits as integers sorts a positive NaN above +Inf, so a max finds
+// it without any NaN test; only a negative NaN shows whether the NaN test works
+// (go-ndarray: a sabotaged loong64 NaN mask passed every test until this case).
+var negNaN32 = math.Float32frombits(0xffc00000)
+
 // refMax32 and refMin32: one sequential pass.
 func refMax32(a []float32) float32 {
 	m := a[0]
@@ -76,13 +82,15 @@ func TestFloat32ExtremaNaNEveryPosition(t *testing.T) {
 	for n := 1; n <= extremaMaxLen; n++ {
 		for pos := 0; pos < n; pos++ {
 			for _, fill := range []float32{0, negZero32, 5, -5} {
-				a := make([]float32, n)
-				for i := range a {
-					a[i] = fill
-				}
-				a[pos] = nan32
-				if !isNaN32(Float32Max(a)) || !isNaN32(Float32Min(a)) {
-					t.Fatalf("n=%d NaN@%d fill=%v: not NaN", n, pos, fill)
+				for _, nv := range []float32{nan32, negNaN32} {
+					a := make([]float32, n)
+					for i := range a {
+						a[i] = fill
+					}
+					a[pos] = nv
+					if !isNaN32(Float32Max(a)) || !isNaN32(Float32Min(a)) {
+						t.Fatalf("n=%d NaN(%#x)@%d fill=%v: not NaN", n, math.Float32bits(nv), pos, fill)
+					}
 				}
 			}
 		}
@@ -139,7 +147,7 @@ func TestFloat32ExtremaNumPyZeroTable(t *testing.T) {
 // length from 1 to 200 (0 panics, below).
 func TestFloat32ExtremaRandom(t *testing.T) {
 	inf := float32(math.Inf(1))
-	vals := []float32{inf, -inf, 0, negZero32, 1, -1, 2.5, -2.5, 3e38, -3e38, 1e-45, -1e-45}
+	vals := []float32{inf, -inf, 0, negZero32, 1, -1, 2.5, -2.5, 3e38, -3e38, 1e-45, -1e-45, 7, -7, 9, -9, 11, -11, 13, -13}
 	seed := uint64(88172645463325252)
 	next := func() int {
 		seed ^= seed << 13
