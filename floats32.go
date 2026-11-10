@@ -16,29 +16,25 @@ func Float32Dot(a, b []float32) float32 {
 func Float32Sum(a []float32) float32 { return sum32(a) }
 
 // Float32Min returns the smallest element of a. It panics if a is empty. If a
-// contains a NaN the result is NaN.
+// contains a NaN the result is NaN, and -0 orders below +0, as numpy.min. SIMD
+// kernels on amd64 (SSE2), arm64 (NEON), loong64 (LSX), ppc64le (VSX), riscv64
+// (RVV) and s390x (VXE); the four-chain loop elsewhere. The result is bit-for-bit
+// the sequential loop's.
 func Float32Min(a []float32) float32 {
 	if len(a) == 0 {
 		panic("floats: Min of empty slice")
 	}
-	m := a[0]
-	for _, v := range a[1:] {
-		m = min(m, v)
-	}
-	return m
+	return minF32(a)
 }
 
 // Float32Max returns the largest element of a. It panics if a is empty. If a
-// contains a NaN the result is NaN.
+// contains a NaN the result is NaN, and +0 orders above -0, as numpy.max. Same
+// kernels as Float32Min.
 func Float32Max(a []float32) float32 {
 	if len(a) == 0 {
 		panic("floats: Max of empty slice")
 	}
-	m := a[0]
-	for _, v := range a[1:] {
-		m = max(m, v)
-	}
-	return m
+	return maxF32(a)
 }
 
 // Float32Distance returns the Euclidean (L2) distance ‖a−b‖₂ over float32

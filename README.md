@@ -441,6 +441,21 @@ and `Distance`/`CosineSimilarity` build on those and are unchanged; float32 uses
 the lane-blocked scalar reference as before. Correctness on s390x is validated
 under QEMU *and* on real z15 silicon.
 
+## Changes in v0.14.0
+
+- `Float32Max` and `Float32Min` run SIMD kernels, moved here from go-ndarray's
+  `internal/kernels` so the kernel lives once (go-ndarray/ndarray#98): SSE2
+  (amd64, baseline), NEON (arm64, from 16 elements), LSX (loong64, gated on
+  LASX), VSX (ppc64le, gated on POWER8+), RVV (riscv64, gated on V) and VXE
+  (s390x, z14+, from 16 elements); every other target, and every CPU without the
+  extension, runs a four-chain loop. The contract is unchanged and bit-for-bit
+  the sequential loop's (and `numpy.max`/`numpy.min`'s): NaN if any element is
+  NaN, `-0` below `+0`, a panic on an empty slice. Tests: NaN and zeros at every
+  position of every length up to 100 (every lane and tail slot), `PROT_NONE`
+  fences on amd64 and arm64, a CPU-gate-off rerun on the four QEMU targets, and
+  `FuzzExtrema32` (nightly in `fuzz.yml`, seed corpus in CI).
+- The s390x CI lane runs QEMU's `max` CPU model (the float32 kernels need z14).
+
 ## Changes in v0.12.0
 
 - `Polyval(dst, x, c)` and `Chebval(dst, x, c)`: Horner and Clenshaw evaluation

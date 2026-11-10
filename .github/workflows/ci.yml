@@ -90,7 +90,7 @@ jobs:
           - { arch: riscv64, image: "debian:trixie", qemu: "rv64,v=true,vlen=512,vext_spec=v1.0" }
           - { arch: loong64, image: "ghcr.io/loong64/debian:trixie", qemu: "la464" }
           - { arch: ppc64le, image: "debian:trixie", qemu: "power9" }
-          - { arch: s390x,   image: "debian:trixie", qemu: "qemu" }
+          - { arch: s390x,   image: "debian:trixie", qemu: "max" }  # the float32 Max/Min kernels need z14 (vector enhancements)
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
