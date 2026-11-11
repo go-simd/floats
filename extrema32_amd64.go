@@ -14,15 +14,38 @@ func max32SSE2(a *float32, n int) float32
 //go:noescape
 func min32SSE2(a *float32, n int) float32
 
+// The AVX2 kernels (extrema32avx2_amd64_gen.go, floats#46) take 32 floats per
+// iteration and run from 32 elements up behind hasAVX2FMA, the gate of the other
+// AVX2 kernels; on a CPU without it, and below 32 elements, the SSE2 kernels run.
+// Same zero-sign rule: a zero result goes to the scalar loop.
+//
+//go:noescape
+func max32AVX2(a *float32, n int) float32
+
+//go:noescape
+func min32AVX2(a *float32, n int) float32
+
 func maxF32(a []float32) float32 {
-	if r := max32SSE2(&a[0], len(a)); r != 0 {
+	var r float32
+	if hasAVX2FMA && len(a) >= 32 {
+		r = max32AVX2(&a[0], len(a))
+	} else {
+		r = max32SSE2(&a[0], len(a))
+	}
+	if r != 0 {
 		return r
 	}
 	return maxRef32(a)
 }
 
 func minF32(a []float32) float32 {
-	if r := min32SSE2(&a[0], len(a)); r != 0 {
+	var r float32
+	if hasAVX2FMA && len(a) >= 32 {
+		r = min32AVX2(&a[0], len(a))
+	} else {
+		r = min32SSE2(&a[0], len(a))
+	}
+	if r != 0 {
 		return r
 	}
 	return minRef32(a)

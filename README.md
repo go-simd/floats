@@ -441,6 +441,14 @@ and `Distance`/`CosineSimilarity` build on those and are unchanged; float32 uses
 the lane-blocked scalar reference as before. Correctness on s390x is validated
 under QEMU *and* on real z15 silicon.
 
+## Changes in v0.15.0
+
+- `Float32Max` and `Float32Min` run AVX2 kernels on amd64 from 32 elements up,
+  behind the same `AVX2+FMA` gate as the other AVX2 kernels; the SSE2 kernels of
+  v0.14.0 stay as the fallback (and below 32 elements). Contract unchanged
+  (floats#46). One Zen 3 core (AMD EPYC 7773X), n = 1048576: 87.6 -> 67 us (Max),
+  90 -> 65 us (Min); n = 16384: 1.40 -> 0.77 us and 1.32 -> 0.74 us.
+
 ## Changes in v0.14.0
 
 - `Float32Max` and `Float32Min` run SIMD kernels, moved here from go-ndarray's
