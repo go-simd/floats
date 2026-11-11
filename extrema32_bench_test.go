@@ -27,10 +27,12 @@ var sinkF32 float32
 // BenchmarkFloat32Extrema compares the dispatched Float32Max/Float32Min with the
 // single-chain loop (naive) and the four-chain loop (ref).
 func BenchmarkFloat32Extrema(b *testing.B) {
-	for _, n := range []int{16, 1000, 100000, 1000000} {
+	// 16384 and 1048576 hold NumPy's reference data (0.25+(i%97)*0.25), the sizes of
+	// the npufunc.py comparison of floats#46.
+	for _, n := range []int{16, 1000, 16384, 100000, 1048576} {
 		a := make([]float32, n)
 		for i := range a {
-			a[i] = float32(i%1021) - 500
+			a[i] = 0.25 + float32(i%97)*0.25
 		}
 		for _, c := range []struct {
 			name string
