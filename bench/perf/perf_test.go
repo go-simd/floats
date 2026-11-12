@@ -161,6 +161,21 @@ var ops = []op{
 	{"Div", refbench.ParityExact, false, args + "np.divide(a, b, out=d)", func(x *data) func() { return func() { floats.Div(x.d, x.a, x.b) } }},
 	{"Sqrt", refbench.ParityExact, false, args + "np.sqrt(hi, out=d)", func(x *data) func() { return func() { floats.Sqrt(x.d, x.hi) } }},
 	{"ClampScalar", refbench.ParityExact, false, args + "np.clip(a, -0.5, 0.5, out=d)", func(x *data) func() { return func() { floats.ClampScalar(x.d, x.a, -0.5, 0.5) } }},
+	// the windowed overlap-add of n/2 steps: a and b are the half blocks, c the window
+	// of n points, d the n outputs. NumPy has no such function: its statement is the
+	// formula on reversed views.
+	{"OverlapWindow", refbench.ParityTolerance, false, args + "(lambda m: (np.subtract(a[:m]*c[::-1][:m], b[:m][::-1]*c[:m], out=d[:m]), np.add(a[:m]*c[:m], b[:m][::-1]*c[::-1][:m], out=d[::-1][:m])))(len(a)//2)", func(x *data) func() {
+		m := len(x.a) / 2
+		return func() { floats.OverlapWindow(x.d, x.a[:m], x.b, x.c) }
+	}},
+	{"Float32OverlapWindow", refbench.ParityTolerance, true, args + "(lambda m: (np.subtract(a[:m]*c[::-1][:m], b[:m][::-1]*c[:m], out=d[:m]), np.add(a[:m]*c[:m], b[:m][::-1]*c[::-1][:m], out=d[::-1][:m])))(len(a)//2)", func(x *data) func() {
+		m := len(x.a32) / 2
+		c32 := make([]float32, len(x.c))
+		for i := range c32 {
+			c32[i] = float32(x.c[i])
+		}
+		return func() { floats.Float32OverlapWindow(x.d32, x.a32[:m], x.b32, c32) }
+	}},
 	{"Axpby3", refbench.ParityTolerance, false, args + "np.add(0.5*a - 1.5*b, 2.5*c, out=d)", func(x *data) func() { return func() { floats.Axpby3(x.d, 0.5, x.a, -1.5, x.b, 2.5, x.c) } }},
 	{"Clamp", refbench.ParityExact, false, args + "np.clip(a, lo, hi, out=d)", func(x *data) func() { return func() { floats.Clamp(x.d, x.a, x.lo, x.hi) } }},
 	{"MaxAbs", refbench.ParityExact, false, args + "np.abs(a).max()", func(x *data) func() { return func() { sink = floats.MaxAbs(x.a) } }},
