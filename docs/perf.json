@@ -1,10 +1,10 @@
 {
   "schema": 1,
   "status": "deferred",
-  "date": "2026-11-09T20:45:04+01:00",
+  "date": "2026-11-12T20:33:13+01:00",
   "commit": "",
   "repo": "go-simd/floats",
-  "go_version": "go1.27.3",
+  "go_version": "go1.27.4",
   "machine": "darwin/arm64, 16 CPUs",
   "ref_versions": {
     "numpy": "2.5.4 (refs.txt)"
@@ -490,6 +490,42 @@
       "func": "ClampScalar",
       "reference": "numpy",
       "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "OverlapWindow/1000",
+      "func": "OverlapWindow",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Float32OverlapWindow/1000",
+      "func": "Float32OverlapWindow",
+      "reference": "numpy",
+      "parity": "tolerance",
       "allocs": 0,
       "go": {
         "median": 0,
@@ -1170,6 +1206,42 @@
       "ratio": 0
     },
     {
+      "name": "OverlapWindow/100000",
+      "func": "OverlapWindow",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Float32OverlapWindow/100000",
+      "func": "Float32OverlapWindow",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
       "name": "Axpby3/100000",
       "func": "Axpby3",
       "reference": "numpy",
@@ -1822,6 +1894,42 @@
       "func": "ClampScalar",
       "reference": "numpy",
       "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "OverlapWindow/1000000",
+      "func": "OverlapWindow",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "Float32OverlapWindow/1000000",
+      "func": "Float32OverlapWindow",
+      "reference": "numpy",
+      "parity": "tolerance",
       "allocs": 0,
       "go": {
         "median": 0,
