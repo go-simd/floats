@@ -81,6 +81,29 @@ lane-order rules of [Floating-point determinism](#floating-point-determinism).
 | arm64 | NEON, ×4 unrolled (8 elements/iteration, four-register `VLD1`/`VST1`) |
 | ppc64le, s390x, riscv64, loong64 | portable `math.FMA` loop: no kernel until one is measured on the real silicon, as for the reductions |
 
+### Gather kernels (index list, float64)
+
+The free-set operations of bound-constrained solvers (L-BFGS-B subspace
+minimisation, active-set QP): vectors read through a list of active indices.
+
+| function | computes |
+|---|---|
+| `DotIdx(a, b, idx)`          | Σₖ `a[idx[k]]*b[idx[k]]` |
+| `DotGather(a, idx, d)`       | Σₖ `a[idx[k]]*d[k]` (`d` contiguous, `a` gathered) |
+| `AxpyGather(alpha, a, idx, d)` | `d[k] = math.FMA(alpha, a[idx[k]], d[k])` for every k |
+
+They are portable Go (no assembly yet; a SIMD gather can replace them behind
+the same signatures). They panic if an index is out of range or
+`len(d) < len(idx)`. Repeated and unordered indices are allowed.
+
+**Accuracy contract.** The two sums use four FMA accumulators over
+lane-blocked groups of four indices (`k mod 4`), combined as
+`(s0+s1)+(s2+s3)`: they are **not** summed left to right, so the last bit
+differs from the obvious loop. The stated bound, asserted against a 300-bit
+`math/big` oracle, is |result − exact| ≤ n·ε·Σₖ|aᵢbᵢ| with ε = 2⁻⁵² (plus an
+absolute 2⁻¹⁰⁷⁴ term per element when products underflow to subnormals).
+`AxpyGather` rounds each element once and is bit-identical everywhere.
+
 ### Products, combinations, clamping, infinity norm (float64)
 
 The vector kernels of splitting solvers (ADMM / OSQP-style quadratic

@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "status": "deferred",
-  "date": "2026-11-12T20:33:13+01:00",
+  "date": "2026-11-12T21:16:56+01:00",
   "commit": "",
   "repo": "go-simd/floats",
   "go_version": "go1.27.4",
@@ -290,6 +290,60 @@
     {
       "name": "AxpyDot/1000",
       "func": "AxpyDot",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "DotIdx/1000",
+      "func": "DotIdx",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "DotGather/1000",
+      "func": "DotGather",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "AxpyGather/1000",
+      "func": "AxpyGather",
       "reference": "numpy",
       "parity": "tolerance",
       "allocs": 0,
@@ -1008,6 +1062,60 @@
       "ratio": 0
     },
     {
+      "name": "DotIdx/100000",
+      "func": "DotIdx",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "DotGather/100000",
+      "func": "DotGather",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "AxpyGather/100000",
+      "func": "AxpyGather",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
       "name": "Scale/100000",
       "func": "Scale",
       "reference": "numpy",
@@ -1694,6 +1802,60 @@
     {
       "name": "AxpyDot/1000000",
       "func": "AxpyDot",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "DotIdx/1000000",
+      "func": "DotIdx",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "DotGather/1000000",
+      "func": "DotGather",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "AxpyGather/1000000",
+      "func": "AxpyGather",
       "reference": "numpy",
       "parity": "tolerance",
       "allocs": 0,

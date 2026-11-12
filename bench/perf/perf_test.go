@@ -133,6 +133,19 @@ type op struct {
 
 const args = "lambda a,b,c,d,lo,hi: "
 
+// gargs adds the gather kernels' index list; the worker evaluates the lambda
+// with n in scope, so the default is computed once, untimed.
+const gargs = "lambda a,b,c,d,lo,hi,i=np.arange(0,n,4): "
+
+// stride4 is 0, 4, 8, … below n: the index list of the gather cases.
+func stride4(n int) []int {
+	idx := make([]int, 0, (n+3)/4)
+	for i := 0; i < n; i += 4 {
+		idx = append(idx, i)
+	}
+	return idx
+}
+
 var ops = []op{
 	{"Dot", refbench.ParityTolerance, false, args + "np.dot(a, b)", func(x *data) func() { return func() { sink = floats.Dot(x.a, x.b) } }},
 	{"Sum", refbench.ParityTolerance, false, args + "np.sum(a)", func(x *data) func() { return func() { sink = floats.Sum(x.a) } }},
@@ -150,6 +163,20 @@ var ops = []op{
 	{"Axpy", refbench.ParityTolerance, false, args + "np.add(d, 0.5*a, out=d)", func(x *data) func() { return func() { floats.Axpy(0.5, x.a, x.d) } }},
 	{"Xpby", refbench.ParityTolerance, false, args + "np.add(a, 0.5*d, out=d)", func(x *data) func() { return func() { floats.Xpby(x.a, 0.5, x.d) } }},
 	{"AxpyDot", refbench.ParityTolerance, false, args + "(np.add(d, 0.5*a, out=d), np.dot(d, b))", func(x *data) func() { return func() { sink = floats.AxpyDot(0.5, x.a, x.d, x.b) } }},
+	// Gather kernels: every 4th element (n/4 active indices), the index list
+	// built once outside the timed body on both sides (NumPy: a default argument).
+	{"DotIdx", refbench.ParityTolerance, false, gargs + "np.dot(a[i], b[i])", func(x *data) func() {
+		idx := stride4(len(x.a))
+		return func() { sink = floats.DotIdx(x.a, x.b, idx) }
+	}},
+	{"DotGather", refbench.ParityTolerance, false, gargs + "np.dot(a[i], b[:len(i)])", func(x *data) func() {
+		idx := stride4(len(x.a))
+		return func() { sink = floats.DotGather(x.a, idx, x.b) }
+	}},
+	{"AxpyGather", refbench.ParityTolerance, false, gargs + "np.add(d[:len(i)], 0.5*a[i], out=d[:len(i)])", func(x *data) func() {
+		idx := stride4(len(x.a))
+		return func() { floats.AxpyGather(0.5, x.a, idx, x.d) }
+	}},
 	{"Scale", refbench.ParityExact, false, args + "np.multiply(d, 1.0, out=d)", func(x *data) func() { return func() { floats.Scale(1.0, x.d) } }},
 	{"Mul", refbench.ParityExact, false, args + "np.multiply(a, b, out=d)", func(x *data) func() { return func() { floats.Mul(x.d, x.a, x.b) } }},
 	{"Exp", refbench.ParityTolerance, false, args + "np.exp(a, out=d)", func(x *data) func() { return func() { floats.Exp(x.d, x.a) } }},
