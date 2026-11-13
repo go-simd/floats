@@ -64,7 +64,9 @@ func exactAbs(x *big.Float) float64 {
 
 const u53 = 0x1p-53
 
-func TestCMulGatherBound(t *testing.T) {
+func TestCMulGatherBound(t *testing.T) { gatherBoundSweep(t) }
+
+func gatherBoundSweep(t *testing.T) {
 	rng := rand.New(rand.NewSource(61))
 	for _, n := range twiddleSizes {
 		x, _, tw := twiddleInputs(rng, n)
@@ -91,7 +93,9 @@ func TestCMulGatherBound(t *testing.T) {
 	}
 }
 
-func TestCMulScatterBound(t *testing.T) {
+func TestCMulScatterBound(t *testing.T) { scatterBoundSweep(t) }
+
+func scatterBoundSweep(t *testing.T) {
 	rng := rand.New(rand.NewSource(62))
 	for _, n := range twiddleSizes {
 		_, c, tw := twiddleInputs(rng, n)
