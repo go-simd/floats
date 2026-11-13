@@ -203,6 +203,25 @@ var ops = []op{
 		}
 		return func() { floats.Float32OverlapWindow(x.d32, x.a32[:m], x.b32, c32) }
 	}},
+	// The twiddle passes of a DCT-IV (a complex multiply by a table with an even /
+	// reversed-odd gather or scatter): a is the real input (or the complex values),
+	// b the table of n/2 complex numbers, d the n outputs. NumPy has no such function:
+	// its statement is the formula on strided and reversed views and complex128.
+	{"CMulGather", refbench.ParityTolerance, false, args + "(lambda z: (d.__setitem__(slice(0, None, 2), z.real), d.__setitem__(slice(1, None, 2), z.imag)))((a[::2] + 1j*a[::-1][::2]) * (b[::2] + 1j*b[1::2]))", func(x *data) func() {
+		return func() { floats.CMulGather(x.d, x.a, x.b) }
+	}},
+	{"CMulScatter", refbench.ParityTolerance, false, args + "(lambda z: (d.__setitem__(slice(0, None, 2), 0.5*z.real), d[::-1].__setitem__(slice(0, None, 2), -0.5*z.imag)))((b[::2] + 1j*b[1::2]) * (a[::2] + 1j*a[1::2]))", func(x *data) func() {
+		return func() { floats.CMulScatter(x.d, x.a, x.b, 0.5) }
+	}},
+	// The float32-data forms (float64 arithmetic): the input widened in the kernel,
+	// the output rounded once; NumPy widens and narrows with astype and a float32
+	// view of the output.
+	{"CMulGatherFrom32", refbench.ParityTolerance, true, args + "(lambda z: (d.__setitem__(slice(0, None, 2), z.real), d.__setitem__(slice(1, None, 2), z.imag)))((a[::2].astype(np.float64) + 1j*a[::-1][::2]) * (b[::2].astype(np.float64) + 1j*b[1::2]))", func(x *data) func() {
+		return func() { floats.CMulGatherFrom32(x.d, x.a32, x.b) }
+	}},
+	{"CMulScatterTo32", refbench.ParityTolerance, false, args + "(lambda z, o: (o.__setitem__(slice(0, None, 2), 0.5*z.real), o[::-1].__setitem__(slice(0, None, 2), -0.5*z.imag)))((b[::2] + 1j*b[1::2]) * (a[::2] + 1j*a[1::2]), d.view(np.float32)[:len(d)])", func(x *data) func() {
+		return func() { floats.CMulScatterTo32(x.d32, x.a, x.b, 0.5) }
+	}},
 	{"Axpby3", refbench.ParityTolerance, false, args + "np.add(0.5*a - 1.5*b, 2.5*c, out=d)", func(x *data) func() { return func() { floats.Axpby3(x.d, 0.5, x.a, -1.5, x.b, 2.5, x.c) } }},
 	{"Clamp", refbench.ParityExact, false, args + "np.clip(a, lo, hi, out=d)", func(x *data) func() { return func() { floats.Clamp(x.d, x.a, x.lo, x.hi) } }},
 	{"MaxAbs", refbench.ParityExact, false, args + "np.abs(a).max()", func(x *data) func() { return func() { sink = floats.MaxAbs(x.a) } }},
