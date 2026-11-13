@@ -1,5 +1,7 @@
 package floats
 
+import "unsafe"
+
 // # Twiddle passes of the DCT-IV and the MDCT (complex multiply by a table, with
 // an even/reversed-odd gather or scatter)
 //
@@ -40,9 +42,20 @@ package floats
 // not, so the two can differ in the last bit; both are within the bound, which the
 // tests assert against a 200-bit computation.
 //
-// dst must not overlap the other operands. n must be even; len(x), len(c) and
-// len(dst) must be at least n, and len(tw) = n. The slices are not read or
-// written beyond n. A panic otherwise.
+// dst[:n] must not overlap the other operands, not even exactly (dst == x): the
+// kernels read both ends of x or c and write both ends of dst in the same step, so
+// an alias is read after it was written. The overlap is checked and panics with a
+// message saying so. n must be even; len(x), len(c) and len(dst) must be at least
+// n, and len(tw) = n. The slices are not read or written beyond n. A panic
+// otherwise.
+
+// overlaps reports whether the memory of a and b intersects; both are non-empty
+// here (n >= 2).
+func overlaps[A, B float32 | float64](a []A, b []B) bool {
+	pa, pb := uintptr(unsafe.Pointer(&a[0])), uintptr(unsafe.Pointer(&b[0]))
+	sa, sb := uintptr(len(a))*unsafe.Sizeof(a[0]), uintptr(len(b))*unsafe.Sizeof(b[0])
+	return pa < pb+sb && pb < pa+sa
+}
 
 // CMulGather writes the pre-twiddle of a DCT-IV: see the formulas above.
 func CMulGather(dst, x, tw []float64) {
@@ -53,7 +66,11 @@ func CMulGather(dst, x, tw []float64) {
 	if n == 0 {
 		return
 	}
-	cmulGather(dst[:n], x[:n], tw)
+	dst, x = dst[:n], x[:n]
+	if overlaps(dst, x) || overlaps(dst, tw) {
+		panic("floats: CMulGather: dst overlaps x or tw")
+	}
+	cmulGather(dst, x, tw)
 }
 
 // CMulGatherFrom32 is CMulGather with x read as float32 and widened.
@@ -65,7 +82,11 @@ func CMulGatherFrom32(dst []float64, x []float32, tw []float64) {
 	if n == 0 {
 		return
 	}
-	cmulGather32(dst[:n], x[:n], tw)
+	dst, x = dst[:n], x[:n]
+	if overlaps(dst, x) || overlaps(dst, tw) {
+		panic("floats: CMulGatherFrom32: dst overlaps x or tw")
+	}
+	cmulGather32(dst, x, tw)
 }
 
 // CMulScatter writes the post-twiddle of a DCT-IV: see the formulas above.
@@ -77,7 +98,11 @@ func CMulScatter(dst, c, tw []float64, f float64) {
 	if n == 0 {
 		return
 	}
-	cmulScatter(dst[:n], c[:n], tw, f)
+	dst, c = dst[:n], c[:n]
+	if overlaps(dst, c) || overlaps(dst, tw) {
+		panic("floats: CMulScatter: dst overlaps c or tw")
+	}
+	cmulScatter(dst, c, tw, f)
 }
 
 // CMulScatterTo32 is CMulScatter with each output rounded to float32.
@@ -89,7 +114,11 @@ func CMulScatterTo32(dst []float32, c, tw []float64, f float64) {
 	if n == 0 {
 		return
 	}
-	cmulScatter32(dst[:n], c[:n], tw, f)
+	dst, c = dst[:n], c[:n]
+	if overlaps(dst, c) || overlaps(dst, tw) {
+		panic("floats: CMulScatterTo32: dst overlaps c or tw")
+	}
+	cmulScatter32(dst, c, tw, f)
 }
 
 // cmulGatherTail is the portable loop from complex index from on, and the

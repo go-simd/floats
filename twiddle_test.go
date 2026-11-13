@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"math/rand"
 	"testing"
+	"unsafe"
 )
 
 var twiddleSizes = []int{2, 4, 6, 8, 10, 12, 14, 16, 18, 30, 32, 34, 62, 64, 66, 126, 128, 130, 254, 256, 510, 512, 1000, 1024, 2048}
@@ -259,6 +260,65 @@ func FuzzCMulTwiddle(f *testing.F) {
 			}
 		}
 	})
+}
+
+// TestCMulOverlap: dst overlapping an input is refused with a message that says
+// so, exactly (dst == x) or by a shift, and for either table; adjacent slices of
+// one backing array do not overlap and give the right result.
+func TestCMulOverlap(t *testing.T) {
+	mustPanicWith := func(name, want string, f func()) {
+		t.Helper()
+		defer func() {
+			r, _ := recover().(string)
+			if r != want {
+				t.Errorf("%s: panic %q, want %q", name, r, want)
+			}
+		}()
+		f()
+	}
+	const n = 16
+	buf := make([]float64, 3*n)
+	buf32 := make([]float32, 3*n)
+	tw := make([]float64, n)
+	other := make([]float64, n)
+	mustPanicWith("gather dst == x", "floats: CMulGather: dst overlaps x or tw", func() { CMulGather(buf[:n], buf[:n], tw) })
+	mustPanicWith("gather shifted", "floats: CMulGather: dst overlaps x or tw", func() { CMulGather(buf[4:4+n], buf[:n], tw) })
+	mustPanicWith("gather dst overlaps tw", "floats: CMulGather: dst overlaps x or tw", func() { CMulGather(buf[:n], other, buf[n-1:2*n-1]) })
+	mustPanicWith("gather32 dst overlaps tw", "floats: CMulGatherFrom32: dst overlaps x or tw", func() { CMulGatherFrom32(buf[:n], buf32[:n], buf[8:8+n]) })
+	mustPanicWith("gather32 dst == x bytes", "floats: CMulGatherFrom32: dst overlaps x or tw", func() {
+		CMulGatherFrom32(buf[:n], unsafe32(buf[:n]), tw)
+	})
+	mustPanicWith("scatter dst == c", "floats: CMulScatter: dst overlaps c or tw", func() { CMulScatter(buf[:n], buf[:n], tw, 1) })
+	mustPanicWith("scatter dst overlaps tw", "floats: CMulScatter: dst overlaps c or tw", func() { CMulScatter(buf[:n], other, buf[n-1:2*n-1], 1) })
+	mustPanicWith("scatter32 dst overlaps c", "floats: CMulScatterTo32: dst overlaps c or tw", func() { CMulScatterTo32(unsafe32(buf[:n]), buf[:n], tw, 1) })
+	mustPanicWith("scatter32 dst overlaps tw", "floats: CMulScatterTo32: dst overlaps c or tw", func() { CMulScatterTo32(unsafe32(buf[:n]), other, buf[:n], 1) })
+
+	// disjoint neighbours of one array: fine, and correct
+	rng := rand.New(rand.NewSource(66))
+	x, c, w := twiddleInputs(rng, n)
+	copy(buf[:n], x)
+	CMulGather(buf[n:2*n], buf[:n], w)
+	want := make([]float64, n)
+	cmulGatherTail(want, x, w, 0)
+	for i := range want {
+		if math.Abs(buf[n+i]-want[i]) > 8*u53*(math.Abs(want[i])+400) {
+			t.Fatalf("adjacent gather differs at %d: %g, want %g", i, buf[n+i], want[i])
+		}
+	}
+	copy(buf[:n], c)
+	CMulScatter(buf[n:2*n], buf[:n], w, 0.5)
+	cmulScatterRef(want, c, w, 0.5)
+	for i := range want {
+		if math.Abs(buf[n+i]-want[i]) > 8*u53*(math.Abs(want[i])+400) {
+			t.Fatalf("adjacent scatter differs at %d: %g, want %g", i, buf[n+i], want[i])
+		}
+	}
+}
+
+// unsafe32 views the memory of a float64 slice as float32 (twice the length), to
+// build operands of different element types that overlap.
+func unsafe32(x []float64) []float32 {
+	return unsafe.Slice((*float32)(unsafe.Pointer(&x[0])), 2*len(x))
 }
 
 func BenchmarkCMulTwiddle(b *testing.B) {
