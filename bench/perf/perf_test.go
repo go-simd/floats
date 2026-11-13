@@ -222,6 +222,23 @@ var ops = []op{
 	{"CMulScatterTo32", refbench.ParityTolerance, false, args + "(lambda z, o: (o.__setitem__(slice(0, None, 2), 0.5*z.real), o[::-1].__setitem__(slice(0, None, 2), -0.5*z.imag)))((b[::2] + 1j*b[1::2]) * (a[::2] + 1j*a[1::2]), d.view(np.float32)[:len(d)])", func(x *data) func() {
 		return func() { floats.CMulScatterTo32(x.d32, x.a, x.b, 0.5) }
 	}},
+	// The fold and unfold of the MDCT: a is the block of n samples (or the n/2 values
+	// of the unfold), d the n/2 (or n) outputs; NumPy's statement is the formula on
+	// slices and reversed views.
+	{"MDCTFold", refbench.ParityExact, false, args + "(lambda m, h: (np.negative(a[m:m+h][::-1] + a[m+h:], out=d[:h]), np.subtract(a[:h], a[h:m][::-1], out=d[h:m])))(len(a)//2, len(a)//4)", func(x *data) func() {
+		return func() { floats.MDCTFold(x.d, x.a) }
+	}},
+	{"MDCTFoldFrom32", refbench.ParityTolerance, true, args + "(lambda m, h: (np.negative(a[m:m+h][::-1].astype(np.float64) + a[m+h:], out=d[:h]), np.subtract(a[:h].astype(np.float64), a[h:m][::-1], out=d[h:m])))(len(a)//2, len(a)//4)", func(x *data) func() {
+		return func() { floats.MDCTFoldFrom32(x.d, x.a32) }
+	}},
+	{"MDCTUnfold", refbench.ParityExact, false, args + "(lambda m, h: (d.__setitem__(slice(0, h), a[h:m]), d.__setitem__(slice(h, m), -a[h:m][::-1]), d.__setitem__(slice(m, m+h), -a[:h][::-1]), d.__setitem__(slice(m+h, m+2*h), -a[:h])))(len(a)//2, len(a)//4)", func(x *data) func() {
+		m := len(x.a) / 2
+		return func() { floats.MDCTUnfold(x.d, x.a[:m]) }
+	}},
+	{"MDCTUnfoldTo32", refbench.ParityTolerance, false, args + "(lambda m, h, o: (o.__setitem__(slice(0, h), a[h:m]), o.__setitem__(slice(h, m), -a[h:m][::-1]), o.__setitem__(slice(m, m+h), -a[:h][::-1]), o.__setitem__(slice(m+h, m+2*h), -a[:h])))(len(a)//2, len(a)//4, d.view(np.float32)[:len(d)])", func(x *data) func() {
+		m := len(x.a) / 2
+		return func() { floats.MDCTUnfoldTo32(x.d32, x.a[:m]) }
+	}},
 	{"Axpby3", refbench.ParityTolerance, false, args + "np.add(0.5*a - 1.5*b, 2.5*c, out=d)", func(x *data) func() { return func() { floats.Axpby3(x.d, 0.5, x.a, -1.5, x.b, 2.5, x.c) } }},
 	{"Clamp", refbench.ParityExact, false, args + "np.clip(a, lo, hi, out=d)", func(x *data) func() { return func() { floats.Clamp(x.d, x.a, x.lo, x.hi) } }},
 	{"MaxAbs", refbench.ParityExact, false, args + "np.abs(a).max()", func(x *data) func() { return func() { sink = floats.MaxAbs(x.a) } }},
