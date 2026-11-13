@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "status": "deferred",
-  "date": "2026-11-13T10:43:09+01:00",
+  "date": "2026-11-13T14:43:32+01:00",
   "commit": "",
   "repo": "go-simd/floats",
   "go_version": "go1.27.4",
@@ -650,6 +650,78 @@
     {
       "name": "CMulScatterTo32/1000",
       "func": "CMulScatterTo32",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "MDCTFold/1000",
+      "func": "MDCTFold",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "MDCTFoldFrom32/1000",
+      "func": "MDCTFoldFrom32",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "MDCTUnfold/1000",
+      "func": "MDCTUnfold",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "MDCTUnfoldTo32/1000",
+      "func": "MDCTUnfoldTo32",
       "reference": "numpy",
       "parity": "tolerance",
       "allocs": 0,
@@ -1494,6 +1566,78 @@
       "ratio": 0
     },
     {
+      "name": "MDCTFold/100000",
+      "func": "MDCTFold",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "MDCTFoldFrom32/100000",
+      "func": "MDCTFoldFrom32",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "MDCTUnfold/100000",
+      "func": "MDCTUnfold",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "MDCTUnfoldTo32/100000",
+      "func": "MDCTUnfoldTo32",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
       "name": "Axpby3/100000",
       "func": "Axpby3",
       "reference": "numpy",
@@ -2306,6 +2450,78 @@
     {
       "name": "CMulScatterTo32/1000000",
       "func": "CMulScatterTo32",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "MDCTFold/1000000",
+      "func": "MDCTFold",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "MDCTFoldFrom32/1000000",
+      "func": "MDCTFoldFrom32",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "MDCTUnfold/1000000",
+      "func": "MDCTUnfold",
+      "reference": "numpy",
+      "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "MDCTUnfoldTo32/1000000",
+      "func": "MDCTUnfoldTo32",
       "reference": "numpy",
       "parity": "tolerance",
       "allocs": 0,

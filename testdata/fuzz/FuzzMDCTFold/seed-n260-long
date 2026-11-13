@@ -1,0 +1,3 @@
+go test fuzz v1
+uint8(64)
+[]byte("the longest length the fuzz target reaches, 260")
