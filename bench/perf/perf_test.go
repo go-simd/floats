@@ -239,6 +239,12 @@ var ops = []op{
 		m := len(x.a) / 2
 		return func() { floats.MDCTUnfoldTo32(x.d32, x.a[:m]) }
 	}},
+	// The power pass of a periodogram: a holds n/2 complex numbers as (re, im) pairs,
+	// d the n/2 squared magnitudes times a scale.
+	{"SquaredMagnitude", refbench.ParityTolerance, false, args + "(lambda z: np.multiply(z.real*z.real + z.imag*z.imag, 0.5, out=d[:len(z)]))(a[::2] + 1j*a[1::2])", func(x *data) func() {
+		m := len(x.a) / 2
+		return func() { floats.SquaredMagnitude(x.d[:m], x.a, 0.5) }
+	}},
 	{"Axpby3", refbench.ParityTolerance, false, args + "np.add(0.5*a - 1.5*b, 2.5*c, out=d)", func(x *data) func() { return func() { floats.Axpby3(x.d, 0.5, x.a, -1.5, x.b, 2.5, x.c) } }},
 	{"Clamp", refbench.ParityExact, false, args + "np.clip(a, lo, hi, out=d)", func(x *data) func() { return func() { floats.Clamp(x.d, x.a, x.lo, x.hi) } }},
 	{"MaxAbs", refbench.ParityExact, false, args + "np.abs(a).max()", func(x *data) func() { return func() { sink = floats.MaxAbs(x.a) } }},
