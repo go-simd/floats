@@ -245,6 +245,12 @@ var ops = []op{
 		m := len(x.a) / 2
 		return func() { floats.SquaredMagnitude(x.d[:m], x.a, 0.5) }
 	}},
+	// The conjugate mirror of a Hermitian spectrum: the complex numbers of a (re, im
+	// pairs) in reverse order with the imaginary parts negated, into d.
+	{"ConjReverse", refbench.ParityExact, false, args + "(np.copyto(d[0::2], a[-2::-2]), np.negative(a[::-2], out=d[1::2]))", func(x *data) func() {
+		n := len(x.a) &^ 1
+		return func() { floats.ConjReverse(x.d[:n], x.a[:n]) }
+	}},
 	{"Axpby3", refbench.ParityTolerance, false, args + "np.add(0.5*a - 1.5*b, 2.5*c, out=d)", func(x *data) func() { return func() { floats.Axpby3(x.d, 0.5, x.a, -1.5, x.b, 2.5, x.c) } }},
 	{"Clamp", refbench.ParityExact, false, args + "np.clip(a, lo, hi, out=d)", func(x *data) func() { return func() { floats.Clamp(x.d, x.a, x.lo, x.hi) } }},
 	{"MaxAbs", refbench.ParityExact, false, args + "np.abs(a).max()", func(x *data) func() { return func() { sink = floats.MaxAbs(x.a) } }},
