@@ -3,8 +3,8 @@ module github.com/go-simd/floats/bench/perf
 go 1.27.3
 
 require (
-	github.com/go-scikit/refbench v0.1.2
-	github.com/go-simd/floats v0.0.0
+	github.com/go-scikit/refbench v0.4.0
+	github.com/go-simd/floats v0.21.0
 )
 
 require (
