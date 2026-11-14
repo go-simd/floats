@@ -1,8 +1,8 @@
 {
   "schema": 1,
   "status": "deferred",
-  "date": "2026-11-14T08:41:38+01:00",
-  "commit": "",
+  "date": "2026-11-15T00:39:05+01:00",
+  "commit": "880a625a93dd987c7f44f3852757ef9795412dca",
   "repo": "go-simd/floats",
   "go_version": "go1.27.4",
   "machine": "darwin/arm64, 16 CPUs",
@@ -904,6 +904,24 @@
       "func": "AxpyRowsNoFMA",
       "reference": "numpy",
       "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "MulAddRows/1000",
+      "func": "MulAddRows",
+      "reference": "numpy",
+      "parity": "tolerance",
       "allocs": 0,
       "go": {
         "median": 0,
@@ -1854,6 +1872,24 @@
       "ratio": 0
     },
     {
+      "name": "MulAddRows/100000",
+      "func": "MulAddRows",
+      "reference": "numpy",
+      "parity": "tolerance",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
       "name": "Polyval/100000",
       "func": "Polyval",
       "reference": "numpy",
@@ -2776,6 +2812,24 @@
       "func": "AxpyRowsNoFMA",
       "reference": "numpy",
       "parity": "exact",
+      "allocs": 0,
+      "go": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ref": {
+        "median": 0,
+        "q1": 0,
+        "q3": 0
+      },
+      "ratio": 0
+    },
+    {
+      "name": "MulAddRows/1000000",
+      "func": "MulAddRows",
+      "reference": "numpy",
+      "parity": "tolerance",
       "allocs": 0,
       "go": {
         "median": 0,

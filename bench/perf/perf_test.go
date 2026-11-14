@@ -263,6 +263,14 @@ var ops = []op{
 		a := []float64{0.5, -1.5, 2.5}
 		return func() { floats.AxpyRowsNoFMA(a, rows, len(x.a), x.d) }
 	}},
+	// The window sum of a polyphase bank: three rows of products accumulated into d
+	// (NumPy: three multiplies and adds, unfused; the kernel fuses each term).
+	{"MulAddRows", refbench.ParityTolerance, false, args + "(np.add(d, a*b, out=d), np.add(d, b*c, out=d), np.add(d, c*a, out=d))", func(x *data) func() {
+		n := len(x.a)
+		ra := append(append(append([]float64(nil), x.a...), x.b...), x.c...)
+		rb := append(append(append([]float64(nil), x.b...), x.c...), x.a...)
+		return func() { floats.MulAddRows(x.d, ra, n, rb, n, 3) }
+	}},
 	{"Polyval", refbench.ParityExact, false, args + "np.polynomial.polynomial.polyval(a, " + seriesPy + ", tensor=False)", func(x *data) func() { return func() { floats.Polyval(x.d, x.a, series) } }},
 	{"Chebval", refbench.ParityExact, false, args + "np.polynomial.chebyshev.chebval(a, " + seriesPy + ", tensor=False)", func(x *data) func() { return func() { floats.Chebval(x.d, x.a, series) } }},
 }
