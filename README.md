@@ -417,10 +417,12 @@ the same on every target and CPU level, bit for bit:
 
 One documented difference from the compiled scalar loop: the Go compiler's own `max`
 may quiet a signalling NaN or pick the other operand of two NaNs where the target's
-instruction does (`FMAX` on arm64, a `MAXSD` sequence on amd64), so the *payload* of
-a NaN result can differ from the builtin's on those machines (`TestPairwiseBuiltin`
-counts them: about 430 of 65536 random pairs have one NaN operand and 130 two,
-on both). The number results, the zeros and the fact of a NaN are identical. Same
+instruction does (`FMAX` on arm64; on amd64 the compiler lowers `max` to
+`-min(-x, -y)` with `MINSD`, `MINSD` and `POR`, `cmd/compile/internal/ssa/_gen/AMD64.rules`
+lines 196 to 199), so the *payload* of a NaN result can differ from the builtin's on
+those machines (`TestPairwiseBuiltin` counts them, per 65536 random pairs, with one
+NaN operand / two: arm64 `Maximum` 432 / 131, `Minimum` 424 / 131; amd64 `Maximum`
+471 / 99, `Minimum` 502 / 92, the native amd64 CI job). The number results, the zeros and the fact of a NaN are identical. Same
 shape as `Add`: the first `len(a)` elements, a panic if `b` or `dst` is shorter, `dst`
 may be `a` or `b` (exact overlap only), nothing read or written past a slice. No
 float32 variant (there is none for `Add`, `Mul` or `Sqrt`).
@@ -468,9 +470,12 @@ kernel against the compiled scalar `max` / `min` loop, ns per call:
 | `Maximum` | 195.6 | 976.5 | 5.0× | 34 142 | 100 820 | 3.0× |
 | `Minimum` | 176.6 | 694.6 | 3.9× | 33 203 | 67 510 | 2.0× |
 
-The portable reference that spells the rule out (the fallback on other CPUs) is
-slower than the builtin loop (1.1 µs per 1e3, 0.69 ms per 1e5 for `Maximum`); it is
-not what amd64 and arm64 run. Not yet timed against NumPy (`docs/perf-exempt.md`);
+The portable fallback (the loop on a CPU without the kernel, and the last seven
+elements) calls the builtin for two numbers and spells the NaN rule out only when
+the result is a NaN: 1.11 µs per 1e3 and 0.123 ms per 1e5 for `Maximum` against the
+builtin loop's 0.97 µs and 0.101 ms (1.1 to 1.2x, one extra compare per element, load 4;
+the first version, which spelled the rule out for every pair, took 0.69 ms). amd64 and
+arm64 run kernels, not this. Not yet timed against NumPy (`docs/perf-exempt.md`);
 the other targets were verified for correctness only.
 
 ### `Exp`, `Log` (float64) and `Float32Exp`, `Float32Log`

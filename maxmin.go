@@ -1,7 +1,5 @@
 package floats
 
-import "math"
-
 // # Pairwise Maximum and Minimum
 //
 // The float64 elementwise maximum and minimum go-ndarray still ran as scalar Go
@@ -65,29 +63,28 @@ func Minimum(dst, a, b []float64) {
 
 // ---- portable reference kernels (the kernel on every architecture without one,
 // and for the last elements of every call). The callers have sliced dst and b to
-// len(a). They spell the rule out instead of calling the builtin, whose NaN
-// choice is the target's.
+// len(a). For two numbers they call the builtin (exact for numbers and for zeros,
+// +0 above -0, and an intrinsic on most targets); the NaN rule is spelled out,
+// because the builtin's NaN choice is the target's.
 
 func maxElem(x, y float64) float64 {
-	if y != y || y > x {
+	if r := max(x, y); r == r { // a NaN only if an operand is one
+		return r
+	}
+	if y != y {
 		return y
 	}
-	if x != x || x > y || x != 0 {
-		return x
-	}
-	// x and y are both ±0: -0 only if both are -0.
-	return math.Float64frombits(math.Float64bits(x) & math.Float64bits(y))
+	return x
 }
 
 func minElem(x, y float64) float64 {
-	if y != y || y < x {
+	if r := min(x, y); r == r {
+		return r
+	}
+	if y != y {
 		return y
 	}
-	if x != x || x < y || x != 0 {
-		return x
-	}
-	// x and y are both ±0: -0 if either is.
-	return math.Float64frombits(math.Float64bits(x) | math.Float64bits(y))
+	return x
 }
 
 func maximumRef(dst, a, b []float64) {
