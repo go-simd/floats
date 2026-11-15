@@ -10,3 +10,5 @@ its reason (`cd bench/perf && go test -run TestPerf .` checks it).
 - `Ceil`: NumPy timing deferred (`np.ceil`), as `Abs`.
 - `Trunc`: NumPy timing deferred (`np.trunc`), as `Abs`.
 - `RoundEven`: NumPy timing deferred (`np.rint`), as `Abs`.
+- `Maximum`: NumPy timing deferred (`np.maximum`). Timed against the scalar Go loop on one Zen 3 core, README. A valid refbench run needs a 1-minute load below 8.
+- `Minimum`: NumPy timing deferred (`np.minimum`), as `Maximum`.
