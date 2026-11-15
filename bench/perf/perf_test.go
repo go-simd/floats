@@ -271,6 +271,12 @@ var ops = []op{
 		rb := append(append(append([]float64(nil), x.b...), x.c...), x.a...)
 		return func() { floats.MulAddRows(x.d, ra, n, rb, n, 3) }
 	}},
+	// The conjugated complex dot product: a and b hold n/2 complex numbers as (re, im)
+	// pairs; NumPy's vdot of the complex views conjugates its first argument.
+	{"CDotC", refbench.ParityTolerance, false, args + "np.vdot(a[:len(a)//2*2].view(np.complex128), b[:len(a)//2*2].view(np.complex128))", func(x *data) func() {
+		n := len(x.a) &^ 1
+		return func() { sink, sink = floats.CDotC(x.a[:n], x.b[:n]) }
+	}},
 	{"Polyval", refbench.ParityExact, false, args + "np.polynomial.polynomial.polyval(a, " + seriesPy + ", tensor=False)", func(x *data) func() { return func() { floats.Polyval(x.d, x.a, series) } }},
 	{"Chebval", refbench.ParityExact, false, args + "np.polynomial.chebyshev.chebval(a, " + seriesPy + ", tensor=False)", func(x *data) func() { return func() { floats.Chebval(x.d, x.a, series) } }},
 }
