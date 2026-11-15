@@ -12,6 +12,8 @@ func TestPairwiseFallbackLoong64(t *testing.T) {
 	defer func() { hasLASX = saved }()
 	t.Logf("hasLASX on this CPU: %v", saved)
 	hasLASX = false
+	pairwiseFallback = true
+	defer func() { pairwiseFallback = false }()
 	for _, tc := range []struct {
 		name string
 		fn   func(*testing.T)

@@ -18,7 +18,8 @@ import (
 type maxminOp struct {
 	name string
 	f    func(dst, a, b []float64)
-	ref  func(dst, a, b []float64)
+	ref  func(dst, a, b []float64) // the fallback: the builtin loop
+	rule func(dst, a, b []float64) // the rule loop that finishes kernel calls
 	want func(x, y float64) float64
 	bi   func(x, y float64) float64 // the Go builtin, ndarray's expression
 }
@@ -58,14 +59,28 @@ func wantMin(x, y float64) float64 {
 }
 
 var maxminOps = []maxminOp{
-	{"Maximum", Maximum, maximumRef, wantMax, func(x, y float64) float64 { return max(x, y) }},
-	{"Minimum", Minimum, minimumRef, wantMin, func(x, y float64) float64 { return min(x, y) }},
+	{"Maximum", Maximum, maximumRef, maximumRule, wantMax, func(x, y float64) float64 { return max(x, y) }},
+	{"Minimum", Minimum, minimumRef, minimumRule, wantMin, func(x, y float64) float64 { return min(x, y) }},
 }
+
+// pairwiseFallback is set by the gate-off tests: with no kernel running, Maximum
+// and Minimum are the builtin loop, so the expected bits are the builtin's.
+var pairwiseFallback bool
 
 func checkMaxMin(t *testing.T, op maxminOp, what string, got, a, b []float64, n, off int) {
 	t.Helper()
 	for i := 0; i < n; i++ {
 		want := op.want(a[i], b[i])
+		if pairwiseFallback {
+			// The builtin's NaN is the target's and may depend on the call site
+			// (the compiler may swap the operands): held to bits for a number, to
+			// "is a NaN" for a NaN.
+			if bw := op.bi(a[i], b[i]); !math.IsNaN(bw) || !math.IsNaN(got[i]) {
+				want = bw
+			} else {
+				want = got[i]
+			}
+		}
 		if math.Float64bits(got[i]) != math.Float64bits(want) {
 			t.Fatalf("%s %s n=%d off=%d: [%d] %s(%v (%#x), %v (%#x)) = %v (%#x), want %v (%#x)", op.name, what, n, off, i,
 				op.name, a[i], math.Float64bits(a[i]), b[i], math.Float64bits(b[i]),
@@ -162,8 +177,18 @@ func TestPairwiseRandomDifferential(t *testing.T) {
 			op.f(dst, a, b)
 			checkMaxMin(t, op, "random", dst, a, b, n, off)
 			checkGuard(t, op.name, buf, n, (off+2)%4)
+			op.rule(dst, a, b)
+			saved := pairwiseFallback
+			pairwiseFallback = false // the rule loop is held to the rule, not the builtin
+			checkMaxMin(t, op, "rule", dst, a, b, n, off)
+			pairwiseFallback = saved
+			// The fallback is the builtin loop, bit for bit.
 			op.ref(dst, a, b)
-			checkMaxMin(t, op, "ref", dst, a, b, n, off)
+			for i := 0; i < n; i++ {
+				if w := op.bi(a[i], b[i]); math.Float64bits(dst[i]) != math.Float64bits(w) && !(math.IsNaN(w) && math.IsNaN(dst[i])) {
+					t.Fatalf("%s ref n=%d: [%d] = %#x, builtin %#x", op.name, n, i, math.Float64bits(dst[i]), math.Float64bits(w))
+				}
+			}
 		})
 	}
 }

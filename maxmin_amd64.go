@@ -31,7 +31,7 @@ func vmaximum(dst, a, b []float64) {
 			maximumSSE2(dst[:n], a[:n], b[:n])
 		}
 	}
-	maximumRef(dst[n:], a[n:], b[n:])
+	maximumRule(dst[n:], a[n:], b[n:])
 }
 
 func vminimum(dst, a, b []float64) {
@@ -43,5 +43,5 @@ func vminimum(dst, a, b []float64) {
 			minimumSSE2(dst[:n], a[:n], b[:n])
 		}
 	}
-	minimumRef(dst[n:], a[n:], b[n:])
+	minimumRule(dst[n:], a[n:], b[n:])
 }

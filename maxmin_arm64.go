@@ -19,7 +19,7 @@ func vmaximum(dst, a, b []float64) {
 	if n > 0 {
 		maximumNEON(dst[:n], a[:n], b[:n])
 	}
-	maximumRef(dst[n:], a[n:], b[n:])
+	maximumRule(dst[n:], a[n:], b[n:])
 }
 
 func vminimum(dst, a, b []float64) {
@@ -27,5 +27,5 @@ func vminimum(dst, a, b []float64) {
 	if n > 0 {
 		minimumNEON(dst[:n], a[:n], b[:n])
 	}
-	minimumRef(dst[n:], a[n:], b[n:])
+	minimumRule(dst[n:], a[n:], b[n:])
 }

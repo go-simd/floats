@@ -14,21 +14,25 @@ func maximumVSX(dst, a, b *float64, n int)
 func minimumVSX(dst, a, b *float64, n int)
 
 func vmaximum(dst, a, b []float64) {
-	n := len(a) &^ 7
-	if n == 0 || !hasVSX {
+	if !hasVSX {
 		maximumRef(dst, a, b)
 		return
 	}
-	maximumVSX(&dst[0], &a[0], &b[0], n)
-	maximumRef(dst[n:], a[n:], b[n:])
+	n := len(a) &^ 7
+	if n > 0 {
+		maximumVSX(&dst[0], &a[0], &b[0], n)
+	}
+	maximumRule(dst[n:], a[n:], b[n:])
 }
 
 func vminimum(dst, a, b []float64) {
-	n := len(a) &^ 7
-	if n == 0 || !hasVSX {
+	if !hasVSX {
 		minimumRef(dst, a, b)
 		return
 	}
-	minimumVSX(&dst[0], &a[0], &b[0], n)
-	minimumRef(dst[n:], a[n:], b[n:])
+	n := len(a) &^ 7
+	if n > 0 {
+		minimumVSX(&dst[0], &a[0], &b[0], n)
+	}
+	minimumRule(dst[n:], a[n:], b[n:])
 }

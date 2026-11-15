@@ -405,7 +405,7 @@ correctness only (QEMU), not timed.
 
 The "K1 remainder" of go-ndarray/ndarray#98 (and #118), which ran them as scalar
 loops. The contract is the language's rule, the one `runtime/minmax.go` spells out,
-the same on every target and CPU level, bit for bit:
+the same on every kernel, bit for bit (and, where no kernel runs, the builtin loop itself):
 
 - **NaN**: a NaN in either operand gives that NaN unchanged (sign, payload, quiet bit:
   a signalling NaN stays signalling); two NaNs give `b[i]`. `max(NaN, +Inf)` is NaN.
@@ -442,6 +442,7 @@ blocks of eight elements with the Go code finishing the last seven:
 | s390x vector facility | `VFCHDB`, `VFCEDB`, `VSEL`, `VN` / `VO` (z13, no `VFMAX`) |
 | loong64 LASX | `XVFCMP.CLT/CEQ/CUN.D`, `XVBITSEL.V`, `XVAND.V` / `XVOR.V` |
 | riscv64 RVV | `vmflt`, `vmfne`, `vmfeq`, `vmor.mm`, `vmerge`, `vand` / `vor` |
+| fallback (no kernel) | builtin `max` / `min` (the compiler's own lowering) |
 
 Manuals: the Intel SDM pages for `CMPPD`, `BLENDVPD`, `MAXPD` (felixcloutier.com
 mirror) and the RISC-V V 1.0 specification (`v-spec.adoc`) were opened. The Arm ARM
@@ -470,12 +471,16 @@ kernel against the compiled scalar `max` / `min` loop, ns per call:
 | `Maximum` | 195.6 | 976.5 | 5.0× | 34 142 | 100 820 | 3.0× |
 | `Minimum` | 176.6 | 694.6 | 3.9× | 33 203 | 67 510 | 2.0× |
 
-The portable fallback (the loop on a CPU without the kernel, and the last seven
-elements) calls the builtin for two numbers and spells the NaN rule out only when
-the result is a NaN: 1.11 µs per 1e3 and 0.123 ms per 1e5 for `Maximum` against the
-builtin loop's 0.97 µs and 0.101 ms (1.1 to 1.2x, one extra compare per element, load 4;
-the first version, which spelled the rule out for every pair, took 0.69 ms). amd64 and
-arm64 run kernels, not this. Not yet timed against NumPy (`docs/perf-exempt.md`);
+Where no kernel runs (an architecture without one, loong64 without LASX, riscv64
+without V, ppc64le before POWER8) `Maximum` and `Minimum` are the builtin loop itself,
+`dst[i] = max(a[i], b[i])`, the compiler's own lowering: exactly what go-ndarray ran, so
+nothing there is slower or different than before (its NaN payload is the target's; on
+riscv64 the builtin returns the canonical NaN, seen under QEMU). The
+last seven elements of a kernel call use a rule loop (the builtin for two numbers, the
+NaN rule when the result is a NaN) so that one call follows one rule; the tests hold
+the fallback to the builtin bit for bit for every number and to "is a NaN" for a NaN
+(under QEMU the loong64 builtin was seen to pick a different operand of two NaNs in
+the loop and in a test closure, so its NaN payload is not even stable per call site). Not yet timed against NumPy (`docs/perf-exempt.md`);
 the other targets were verified for correctness only.
 
 ### `Exp`, `Log` (float64) and `Float32Exp`, `Float32Log`

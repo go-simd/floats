@@ -12,6 +12,8 @@ func TestPairwiseFallbackRISCV64(t *testing.T) {
 	defer func() { hasRVV = saved }()
 	t.Logf("hasRVV on this CPU: %v", saved)
 	hasRVV = false
+	pairwiseFallback = true
+	defer func() { pairwiseFallback = false }()
 	for _, tc := range []struct {
 		name string
 		fn   func(*testing.T)

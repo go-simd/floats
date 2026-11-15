@@ -18,7 +18,7 @@ func vmaximum(dst, a, b []float64) {
 		maximumVX(&dst[0], &a[0], &b[0], n)
 		dst, a, b = dst[n:], a[n:], b[n:]
 	}
-	maximumRef(dst, a, b)
+	maximumRule(dst, a, b)
 }
 
 func vminimum(dst, a, b []float64) {
@@ -26,5 +26,5 @@ func vminimum(dst, a, b []float64) {
 		minimumVX(&dst[0], &a[0], &b[0], n)
 		dst, a, b = dst[n:], a[n:], b[n:]
 	}
-	minimumRef(dst, a, b)
+	minimumRule(dst, a, b)
 }

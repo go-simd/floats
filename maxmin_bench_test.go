@@ -9,7 +9,7 @@ import (
 // BenchmarkPairwise times Maximum and Minimum against the scalar Go loop ndarray
 // ran (dst[i] = max(a[i], b[i]), the Go builtin) on the same data, at a size that
 // fits the L1 cache (1e3) and one that fits the L2/L3 (1e5 is 800 kB per slice).
-// The "ref" rows time the portable maximumRef, which spells the NaN rule out.
+// The "ref" rows time maximumRef, the fallback (the same builtin loop, in the package).
 func BenchmarkPairwise(b *testing.B) {
 	rng := rand.New(rand.NewSource(75))
 	for _, n := range []int{1000, 100000} {

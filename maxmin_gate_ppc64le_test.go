@@ -12,6 +12,8 @@ func TestPairwiseFallbackPPC64LE(t *testing.T) {
 	defer func() { hasVSX = saved }()
 	t.Logf("hasVSX on this CPU: %v", saved)
 	hasVSX = false
+	pairwiseFallback = true
+	defer func() { pairwiseFallback = false }()
 	for _, tc := range []struct {
 		name string
 		fn   func(*testing.T)

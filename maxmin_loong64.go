@@ -14,21 +14,25 @@ func maximumLASX(dst, a, b *float64, n int)
 func minimumLASX(dst, a, b *float64, n int)
 
 func vmaximum(dst, a, b []float64) {
-	n := len(a) &^ 7
-	if n == 0 || !hasLASX {
+	if !hasLASX {
 		maximumRef(dst, a, b)
 		return
 	}
-	maximumLASX(&dst[0], &a[0], &b[0], n)
-	maximumRef(dst[n:], a[n:], b[n:])
+	n := len(a) &^ 7
+	if n > 0 {
+		maximumLASX(&dst[0], &a[0], &b[0], n)
+	}
+	maximumRule(dst[n:], a[n:], b[n:])
 }
 
 func vminimum(dst, a, b []float64) {
-	n := len(a) &^ 7
-	if n == 0 || !hasLASX {
+	if !hasLASX {
 		minimumRef(dst, a, b)
 		return
 	}
-	minimumLASX(&dst[0], &a[0], &b[0], n)
-	minimumRef(dst[n:], a[n:], b[n:])
+	n := len(a) &^ 7
+	if n > 0 {
+		minimumLASX(&dst[0], &a[0], &b[0], n)
+	}
+	minimumRule(dst[n:], a[n:], b[n:])
 }
