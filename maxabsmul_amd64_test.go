@@ -35,3 +35,18 @@ func TestMaxAbsMulAVX2Direct(t *testing.T) {
 		}
 	}
 }
+
+// Without AVX2+FMA the dispatcher takes the portable loop: same bits.
+func TestMaxAbsMulPortableDispatch(t *testing.T) {
+	saved := hasAVX2FMA
+	defer func() { hasAVX2FMA = saved }()
+	hasAVX2FMA = false
+	rng := rand.New(rand.NewSource(4))
+	for n := 0; n <= 40; n++ {
+		v, w := make([]float64, n), make([]float64, n)
+		for i := range v {
+			v[i], w[i] = mamSpecial(rng), mamSpecial(rng)
+		}
+		checkMaxAbsMul(t, "portable", v, w)
+	}
+}
