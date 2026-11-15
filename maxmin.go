@@ -41,8 +41,10 @@ package floats
 // opened.
 
 // Maximum computes dst[i] = max(a[i], b[i]) for i < len(a), the Go builtin max:
-// NaN-propagating (the second operand's NaN if both are), +0 above -0, np.maximum
-// up to the choice of NaN and the order of a (-0, +0) pair. It panics if len(b) <
+// NaN-propagating, +0 above -0, np.maximum up to the choice of NaN and the order
+// of a (-0, +0) pair. With a vector kernel a NaN operand is returned unchanged
+// and, if both are NaNs, b[i]'s; where no kernel runs it is the builtin loop,
+// whose NaN choice is target-dependent (see README). It panics if len(b) <
 // len(a) or len(dst) < len(a).
 func Maximum(dst, a, b []float64) {
 	if len(b) < len(a) || len(dst) < len(a) {
@@ -52,8 +54,10 @@ func Maximum(dst, a, b []float64) {
 }
 
 // Minimum computes dst[i] = min(a[i], b[i]) for i < len(a), the Go builtin min:
-// NaN-propagating (the second operand's NaN if both are), -0 below +0, np.minimum
-// up to the choice of NaN and the order of a (-0, +0) pair. It panics if len(b) <
+// NaN-propagating, -0 below +0, np.minimum up to the choice of NaN and the order
+// of a (-0, +0) pair. With a vector kernel a NaN operand is returned unchanged
+// and, if both are NaNs, b[i]'s; where no kernel runs it is the builtin loop,
+// whose NaN choice is target-dependent (see README). It panics if len(b) <
 // len(a) or len(dst) < len(a).
 func Minimum(dst, a, b []float64) {
 	if len(b) < len(a) || len(dst) < len(a) {
