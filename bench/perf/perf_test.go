@@ -254,6 +254,7 @@ var ops = []op{
 	{"Axpby3", refbench.ParityTolerance, false, args + "np.add(0.5*a - 1.5*b, 2.5*c, out=d)", func(x *data) func() { return func() { floats.Axpby3(x.d, 0.5, x.a, -1.5, x.b, 2.5, x.c) } }},
 	{"Clamp", refbench.ParityExact, false, args + "np.clip(a, lo, hi, out=d)", func(x *data) func() { return func() { floats.Clamp(x.d, x.a, x.lo, x.hi) } }},
 	{"MaxAbs", refbench.ParityExact, false, args + "np.abs(a).max()", func(x *data) func() { return func() { sink = floats.MaxAbs(x.a) } }},
+	{"MaxAbsMul", refbench.ParityExact, false, args + "(np.abs(a) * b).max()", func(x *data) func() { return func() { sink = floats.MaxAbsMul(x.a, x.b) } }},
 	{"AxpyNoFMA", refbench.ParityExact, false, args + "np.add(d, 0.5*a, out=d)", func(x *data) func() { return func() { floats.AxpyNoFMA(0.5, x.a, x.d) } }},
 	{"XpbyNoFMA", refbench.ParityExact, false, args + "np.add(a, 0.5*d, out=d)", func(x *data) func() { return func() { floats.XpbyNoFMA(x.a, 0.5, x.d) } }},
 	{"Axpby3NoFMA", refbench.ParityExact, false, args + "np.add(0.5*a + -1.5*b, 2.5*c, out=d)", func(x *data) func() { return func() { floats.Axpby3NoFMA(x.d, 0.5, x.a, -1.5, x.b, 2.5, x.c) } }},
