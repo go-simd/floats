@@ -116,7 +116,7 @@ onto a box and the ∞-norm of a residual.
 | `Axpby3(dst, alpha, a, beta, b, gamma, c)`    | `dst[i] = math.FMA(gamma, c[i], math.FMA(beta, b[i], alpha*a[i]))` (αa + βb + γc, fused) |
 | `Clamp(dst, v, lo, hi)`                       | `dst[i] = min(max(v[i], lo[i]), hi[i])`, with the exact NaN and signed-zero rules below |
 | `MaxAbs(v)`                                   | the largest `abs(v[i])` (the ∞-norm); 0 for an empty slice |
-| `MaxAbsMul(v, w)`                             | `max(abs(v[i])*w[i])`, the weighted max-norm of ODE error control, folded with C's `fmax` from +0 (a NaN product loses); NEON on arm64, portable loop elsewhere |
+| `MaxAbsMul(v, w)`                             | `max(abs(v[i])*w[i])`, the weighted max-norm of ODE error control, folded with C's `fmax` from +0 (a NaN product loses), bit-identical to that loop; NEON on arm64, AVX2 on amd64, portable loop elsewhere; 0.17–0.43 of NumPy's time (arm64, one core) |
 
 ```go
 // one ADMM-style step: z = Π_[l,u](α·Ax + (1−α)·z_prev + y/ρ)
