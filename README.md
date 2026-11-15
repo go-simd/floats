@@ -772,13 +772,15 @@ and `Distance`/`CosineSimilarity` build on those and are unchanged; float32 uses
 the lane-blocked scalar reference as before. Correctness on s390x is validated
 under QEMU *and* on real z15 silicon.
 
-## Changes in the next release
+## Changes in v0.26.0
 
 - `Maximum` and `Minimum` (float64, `dst[i] = max(a[i], b[i])` / `min`, the Go
   builtins): the pairwise elementwise kernels go-ndarray still ran as scalar loops
-  (go-ndarray/ndarray#98, #118). NaN-propagating (a NaN operand is returned
-  unchanged, `b[i]` if both are NaNs), `max(-0, +0)` is `+0` and `min(-0, +0)` is
-  `-0` in either operand order, bit-identical on every target. AVX2 and SSE2, NEON,
+  (go-ndarray/ndarray#98, #118). NaN-propagating, `max(-0, +0)` is `+0` and
+  `min(-0, +0)` is `-0` in either operand order; bit-identical to the builtin for
+  numbers and zeros on every target. NaN results: with a vector kernel a NaN operand
+  is returned unchanged (`b[i]` if both are NaNs); where no kernel runs the functions
+  are the builtin loop, whose NaN choice is target-dependent. AVX2 and SSE2, NEON,
   VSX, the s390x vector facility, LASX and RVV kernels (compare-and-select; FMAX plus
   a NaN fix-up on arm64). One Zen 3 core, 1e5 float64: 2.0 to 3.0x the scalar loop,
   3.9 to 5.0x at 1e3. Documented difference: the payload of a NaN result may differ from the
