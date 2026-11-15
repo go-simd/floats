@@ -17,10 +17,12 @@ import "math"
 // NaN: Abs and Neg only touch the sign bit, so a NaN keeps its payload and
 // quiet bit whatever its sign. The others return a NaN for a NaN: a quiet NaN
 // keeps its sign and payload on every target but riscv64 (whose floating point
-// arithmetic produces the canonical NaN), a signalling NaN comes back quieted
-// where the hardware quiets it (Go's own math.Floor does the same on the targets
-// where it is an instruction), exactly like the Go expression run on the same
-// machine.
+// arithmetic produces the canonical NaN), a signalling NaN may be returned
+// quieted; it may differ from the math function on the same machine (where that
+// is pure Go, as math.RoundToEven on ppc64le, it returns the NaN unchanged).
+//
+// ppc64le: RoundEven (xvrdpic) follows FPSCR.RN. Go never changes it, but cgo code
+// calling fesetround could.
 //
 // Kernels: amd64 AVX2 (sign masks with VANDPD/VXORPD, VMULPD, VROUNDPD with
 // imm8 9, 10, 11, 8), the SSE2 baseline for Abs, Neg and Square (the rounding

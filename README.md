@@ -320,8 +320,8 @@ and every architecture: `±0` keep their sign (`Ceil(-0.5)` is `-0`), `±Inf` an
 `|x| ≥ 2⁵²` (already integers) pass through, subnormals are handled, and a NaN
 stays a NaN. `Abs` and `Neg` only touch the sign bit, so every NaN keeps its exact
 bits; the others return a quiet NaN's sign and payload unchanged (a signalling NaN
-comes back quieted, as the hardware does for `math.Floor` and `x*x`; riscv64
-arithmetic returns the canonical NaN). Same shape as `Sqrt`: they work on the first
+may be returned quieted and may differ from the `math` function on the same machine,
+which is pure Go on some targets; riscv64 arithmetic returns the canonical NaN). Same shape as `Sqrt`: they work on the first
 `len(src)` elements, panic if `len(dst) < len(src)`, allow `dst` to be `src` (exact
 overlap only), never read or write past a slice.
 
@@ -339,7 +339,8 @@ of eight elements with the Go code finishing the last seven:
 | riscv64 RVV | `vfsgnjx` / `vfsgnjn` | `vfmul` | scalar loop |
 
 `xvrdpi` rounds halfway cases away from zero, so `RoundEven` uses `xvrdpic`, which
-rounds in the current mode (FPSCR.RN, round to nearest even; Go never changes it).
+rounds in the current mode (FPSCR.RN, round to nearest even; Go never changes it, but
+cgo code calling `fesetround` could).
 riscv64 keeps the four rounding functions scalar: RVV 1.0 has no vector
 round-to-integral instruction, and a float to integer to float round trip is wrong
 for `|x| ≥ 2⁶³`, for NaN and for `-0`; an exact guarded version was not attempted
