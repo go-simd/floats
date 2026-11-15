@@ -7,6 +7,9 @@ import (
 	"testing"
 )
 
+// cdotVector reports whether CDotC runs a vector kernel on this machine.
+func cdotVector() bool { return hasAVX2FMA }
+
 // TestCDotCPortableForced: the path of a CPU without AVX2+FMA, forced on any host, is
 // within the same bound.
 func TestCDotCPortableForced(t *testing.T) {
@@ -37,6 +40,6 @@ func TestCDotCAVX2Dispatch(t *testing.T) {
 		if pr != kr+tr || pi != ki+ti {
 			t.Fatalf("n=%d: the public result is not the kernel plus the tail", n)
 		}
-		cdotCheck(t, "AVX2", n, pr, pi, a, b)
+		cdotCheck(t, "AVX2", n, pr, pi, a, b, true)
 	}
 }

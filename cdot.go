@@ -19,11 +19,20 @@ import "math"
 // complex number, AVX2 two registers of two) on a block of four complex numbers, the
 // second sum on the real and imaginary parts of b swapped, and fold the lanes at the end.
 //
-// Contract (go-fft#121, the fleet rule: a stated bound, not bit identity): every sum is
-// reordered (lanes and blocks) and fused, so each of the two results is within
-// (n+4)·2^-53 of the sum of the absolute values of its products, |ar br| + |ai bi| +
-// |ar bi| + |ai br|, of the exact value; the tests assert it against a 300-bit computation
-// for every length from 0 to 4,097 complex numbers. len(a) must be even; b is not read
+// Contract (go-fft#121, the fleet rule: a stated bound, not bit identity): with u = 2^-53
+// and S the sum of the absolute values of the products of a result (|ar br| + |ai bi| for
+// the real part, |ar bi| + |ai br| for the imaginary part), each result is within
+//
+//   - the portable path, one serial chain of 2n fused multiply-adds: (2n+2)·u·S; the bound
+//     is reached (an input whose rounding errors all have the same sign gives 2n-2 units),
+//     so it cannot be tightened;
+//   - the vector paths, chains of about n/4 steps in every lane, then at most four
+//     additions to fold the lanes and a serial tail of at most three complex numbers:
+//     (n/4+8)·u·S.
+//
+// The tests assert both against a 300-bit computation for every length from 0 to 70 and at
+// the sizes of a transform, on random data, on an adversarial input that reaches the
+// portable bound, and on data with massive cancellation. len(a) must be even; b is not read
 // past len(a).
 
 // CDotC returns the real and imaginary parts of Σ conj(a_k)·b_k for the n = len(a)/2

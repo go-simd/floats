@@ -22,7 +22,7 @@ func TestCDotCGuardPages(t *testing.T) {
 				a[i], b[i] = float64(i)*0.25+1, 1/float64(i+1)
 			}
 			gr, gi := CDotC(a, b)
-			cdotCheck(t, "guard", n, gr, gi, a, b)
+			cdotCheck(t, "guard", n, gr, gi, a, b, cdotVector())
 		}
 	}
 }

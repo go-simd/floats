@@ -284,10 +284,12 @@ magnitudes of a complex slice needs no kernel: `Dot(a, a)` over the same float64
 four complex numbers per step with the second sum on the swapped parts of `b` (NEON
 `VFMLA` on `VEXT`-swapped registers, AVX2 `VFMADD231PD` on `VPERMILPD`-swapped ones) and
 fold the lanes at the end. The contract is a bound, not bit identity: both parts are
-reordered and fused, so each is within `(n+4)·2^-53` of the sum of the absolute values of
-its products of the exact value, asserted by `TestCDotCBound` against a 300-bit computation
-at every length from 0 to 70 complex numbers and at the sizes of a transform, with a fuzz
-target and guard pages. `len(a)` must be even and `b` at least as long (panics). amd64 AVX2
+reordered and fused, so each is within `(2n+2)·2^-53` (the portable path, one serial chain of
+2n fused steps; reached by an adversarial input, so not improvable) or `(n/4+8)·2^-53` (the
+vector paths) of the sum of the absolute values of its products of the exact value, asserted
+against a 300-bit computation at every length from 0 to 70 complex numbers and at the sizes
+of a transform by `TestCDotCBound`, by `TestCDotCAdversarial` (same-sign rounding errors, and
+massive cancellation), with a fuzz target and guard pages. `len(a)` must be even and `b` at least as long (panics). amd64 AVX2
 tests run on a CI runner and fail, not skip, when AVX2+FMA is missing there
 (`TestCDotCAVX2Dispatch`); the portable loop elsewhere and on an amd64 CPU without it.
 Measured, 38 complex numbers (one SBR predictor lag): Ryzen 9 7950X 47 to 10.7 ns (4.4x), M4
