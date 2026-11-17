@@ -12,3 +12,5 @@ its reason (`cd bench/perf && go test -run TestPerf .` checks it).
 - `RoundEven`: NumPy timing deferred (`np.rint`), as `Abs`.
 - `Maximum`: NumPy timing deferred (`np.maximum`). Timed against the scalar Go loop on one Zen 3 core, README. A valid refbench run needs a 1-minute load below 8.
 - `Minimum`: NumPy timing deferred (`np.minimum`), as `Maximum`.
+- `MirrorCombine`: no NumPy equivalent (a fused pair pass of a real transform); timed in the DCT-II/III of go-fft/fft#162 against FFTW, not against NumPy.
+- `MirrorCombineSplit`: no NumPy equivalent, as `MirrorCombine`.
