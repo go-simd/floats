@@ -2,7 +2,10 @@
 
 package floats
 
-import "testing"
+import (
+	"math"
+	"testing"
+)
 
 // TestMirrorCombinePortable runs the oracle with the kernels off: the Go loops alone.
 func TestMirrorCombinePortable(t *testing.T) {
@@ -26,6 +29,11 @@ func TestMirrorCombineKernelRuns(t *testing.T) {
 	d1, d2 := make([]float64, 2*n), make([]float64, 2*n)
 	mirrorCombineAVX2(d1, z, w1, w2)
 	mirrorTail(d2, z, w1, w2, n, 1)
+	for i := 2; i < 2*n; i++ {
+		if math.Abs(d1[i]-d2[i]) > 1e-12*(1+math.Abs(d2[i])) {
+			t.Fatalf("kernel d1[%d] = %v, portable loop %v", i, d1[i], d2[i])
+		}
+	}
 	for k := 1; k < 1+2*((n-1)/2); k++ {
 		if d1[2*k] == 0 && d1[2*k+1] == 0 {
 			t.Fatalf("kernel left k=%d unwritten", k)

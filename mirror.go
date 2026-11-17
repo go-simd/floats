@@ -22,7 +22,7 @@ package floats
 //
 // Contract: not bit for bit with any other implementation. A kernel fuses the
 // multiply-adds of the products; the tests assert, against the portable loop and a
-// double-double oracle, an error of at most 4 eps (2^-52) of |w1||u| + |w2||v| on each
+// 300-bit math/big oracle, an error of at most 4 eps (2^-52) of |w1||u| + |w2||v| plus an absolute floor of 64 smallest subnormals (underflow) on each
 // part.
 //
 // z has 2n floats, n >= 1 (an odd length panics); w1 and w2 hold at least 2n floats

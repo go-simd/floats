@@ -33,6 +33,12 @@ func mirrorOracle(k, n int, z, w1, w2 []float64) (rr, ri, scale float64) {
 
 const mirrorSentinel = 1234.5
 
+// mirrorTol is the bound: 4 eps of the scale, plus an absolute floor for the products
+// and sums that underflow to subnormals (found by -fuzz, testdata/fuzz).
+func mirrorTol(scale float64) float64 {
+	return 4*0x1p-52*scale + 64*math.SmallestNonzeroFloat64
+}
+
 func mirrorInputs(rng *rand.Rand, n int) (z, w1, w2 []float64) {
 	z, w1, w2 = make([]float64, 2*n), make([]float64, 2*n), make([]float64, 2*n)
 	for i := range z {
@@ -47,7 +53,6 @@ func mirrorInputs(rng *rand.Rand, n int) (z, w1, w2 []float64) {
 // that the entries they do not own are untouched.
 func checkMirror(t *testing.T, lens []int) {
 	t.Helper()
-	const bound = 4 * 0x1p-52
 	rng := rand.New(rand.NewSource(1))
 	for _, n := range lens {
 		z, w1, w2 := mirrorInputs(rng, n)
@@ -64,7 +69,7 @@ func checkMirror(t *testing.T, lens []int) {
 				continue
 			}
 			rr, ri, sc := mirrorOracle(k, n, z, w1, w2)
-			if math.Abs(dst[2*k]-rr) > bound*sc || math.Abs(dst[2*k+1]-ri) > bound*sc {
+			if math.Abs(dst[2*k]-rr) > mirrorTol(sc) || math.Abs(dst[2*k+1]-ri) > mirrorTol(sc) {
 				t.Fatalf("n=%d k=%d: got (%v,%v) want (%v,%v) scale %v", n, k, dst[2*k], dst[2*k+1], rr, ri, sc)
 			}
 		}
@@ -80,7 +85,7 @@ func checkMirror(t *testing.T, lens []int) {
 		written := make([]bool, len(dst))
 		for k := 1; k < n; k++ {
 			rr, ri, sc := mirrorOracle(k, n, z, w1, w2)
-			if math.Abs(dst[k]-rr) > bound*sc || math.Abs(dst[2*n-k]+ri) > bound*sc {
+			if math.Abs(dst[k]-rr) > mirrorTol(sc) || math.Abs(dst[2*n-k]+ri) > mirrorTol(sc) {
 				t.Fatalf("n=%d k=%d: split got (%v,%v) want (%v,%v) scale %v", n, k, dst[k], dst[2*n-k], rr, -ri, sc)
 			}
 			written[k], written[2*n-k] = true, true
@@ -213,7 +218,7 @@ func FuzzMirrorCombine(f *testing.F) {
 		MirrorCombineSplit(dst2, z, w1, w2)
 		for k := 1; k < n; k++ {
 			rr, ri, sc := mirrorOracle(k, n, z, w1, w2)
-			tol := 4 * 0x1p-52 * sc
+			tol := mirrorTol(sc)
 			if math.Abs(dst[2*k]-rr) > tol || math.Abs(dst[2*k+1]-ri) > tol ||
 				math.Abs(dst2[k]-rr) > tol || math.Abs(dst2[2*n-k]+ri) > tol {
 				t.Fatalf("n=%d k=%d: kernel (%v,%v | %v,%v) oracle (%v,%v) tol %v", n, k, dst[2*k], dst[2*k+1], dst2[k], dst2[2*n-k], rr, ri, tol)
