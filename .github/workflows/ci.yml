@@ -13,11 +13,13 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with: { go-version: '1.27.3' }
-      - name: regenerate mirror_amd64.s
+      - name: regenerate mirror_amd64.s and cmulziprev_amd64.s
         run: |
           printf 'module gen\n\ngo 1.27.1\n\nrequire github.com/go-asmgen/asmgen v0.23.0\n' > "$RUNNER_TEMP/gen.mod"
-          GOFLAGS=-mod=mod go run -modfile="$RUNNER_TEMP/gen.mod" mirror_amd64_gen.go
-          git diff --exit-code -- mirror_amd64.s || { echo "::error::mirror_amd64.s is stale or hand-edited; run mirror_amd64_gen.go and commit"; exit 1; }
+          for g in mirror cmulziprev; do
+            GOFLAGS=-mod=mod go run -modfile="$RUNNER_TEMP/gen.mod" ${g}_amd64_gen.go
+            git diff --exit-code -- ${g}_amd64.s || { echo "::error::${g}_amd64.s is stale or hand-edited; run ${g}_amd64_gen.go and commit"; exit 1; }
+          done
   native:
     strategy:
       fail-fast: false
