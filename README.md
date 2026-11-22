@@ -343,6 +343,13 @@ eight integer ranges (it panics on a slot out of range or a link that reads the 
 writes). `plan.Out()` is the output. In go-avkit/decode this is about 1.2 % of an HE-AAC v2
 decode, where the per-call proof of `AllPass3` cost more than it saved.
 
+`NewAllPass3TickPlan(…, inDelay)` and `plan.RunTick(t)` go one step further for a decorrelator
+driven by a tick counter: link `l`, whose ring holds `m` slots, reads slot `(t+1) mod m` and
+writes slot `t mod m`, and the input is slot `(t - inDelay) mod s`. The slots follow from `t`
+and from sizes proved at construction, so a call checks nothing and cannot panic for any `t`
+(a negative `t` reduces as `uint(t)` does). For `t >= 0` it is bit-identical to `Run` on those
+slots. Wanted by go-avkit/decode#77.
+
 ### `CDotC`: the conjugated complex dot product
 
 `CDotC(a, b)` returns `Σ conj(a_k)·b_k` (the BLAS `zdotc`) as `(re, im)` for the `n =
