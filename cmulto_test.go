@@ -205,3 +205,25 @@ func FuzzCMulTo(f *testing.F) {
 		}
 	})
 }
+
+// TestCMulToTail runs the portable loop itself, from every start, on every build: it is
+// the reference of the kernels, and on arm64 nothing else calls it.
+func TestCMulToTail(t *testing.T) {
+	rng := rand.New(rand.NewSource(9))
+	a, b := cmulRand(rng, 9, 3), cmulRand(rng, 9, 3)
+	for from := 0; from <= 9; from++ {
+		d := make([]complex128, 9)
+		for i := range d {
+			d[i] = complex(mirrorSentinel, 0)
+		}
+		cmulToTail(d, a, b, from)
+		for i := range d {
+			if i >= from && !cmulOK(d[i], a[i], b[i]) {
+				t.Fatalf("from=%d: d[%d] = %v, want %v", from, i, d[i], a[i]*b[i])
+			}
+			if i < from && d[i] != complex(mirrorSentinel, 0) {
+				t.Fatalf("from=%d: d[%d] was written", from, i)
+			}
+		}
+	}
+}
