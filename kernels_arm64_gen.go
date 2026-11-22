@@ -123,9 +123,15 @@ func foldS4(b *arm64.Builder) {
 // SumSqDiff and the float32 forms latency-bound.
 var accRegs = []int{0, 16, 17, 18, 20, 21, 22, 23}
 
-// zeroAccs clears the eight accumulators.
-func zeroAccs(b *arm64.Builder) {
-	for _, r := range accRegs {
+// zeroAccs clears V0 and sets the index R3 to zero, branches past the unrolled
+// loop (to ufoldend, after the fold) when fewer than stride elements are left,
+// and otherwise clears the other seven accumulators. A short input thus pays for
+// neither the zeroing nor the fold of eight accumulators.
+func zeroAccs(b *arm64.Builder, stride int) {
+	b.Raw("MOVD $0, R3")
+	b.Raw("VEOR V0.B16, V0.B16, V0.B16")
+	b.Raw("CMP $%d, R1", stride).Raw("BLT ufoldend")
+	for _, r := range accRegs[1:] {
 		b.Raw("VEOR V%d.B16, V%d.B16, V%d.B16", r, r, r)
 	}
 }
@@ -143,6 +149,7 @@ func foldAccs(b *arm64.Builder, arr string) {
 	add(0, 2)
 	add(1, 3)
 	add(0, 1)
+	b.Label("ufoldend")
 }
 
 // dotF64 keeps eight independent D2 accumulators (accRegs), 16 elements per
@@ -152,7 +159,7 @@ func foldAccs(b *arm64.Builder, arr string) {
 func dotF64() *arm64.Builder {
 	b := arm64.NewFunc("dotNEON", dotSig(abi.Float64), 0)
 	b.LoadArg("a_base", "R0").LoadArg("a_len", "R1").LoadArg("b_base", "R2")
-	zeroAccs(b)
+	zeroAccs(b, 16)
 	b.Raw("MOVD $0, R3").
 		Label("uloop"). // stride 16
 		Raw("ADD $16, R3, R4").Raw("CMP R1, R4").Raw("BGT ufold").
@@ -193,7 +200,7 @@ func dotF64() *arm64.Builder {
 func sumF64() *arm64.Builder {
 	b := arm64.NewFunc("sumNEON", sumSig(abi.Float64), 0)
 	b.LoadArg("a_base", "R0").LoadArg("a_len", "R1")
-	zeroAccs(b)
+	zeroAccs(b, 16)
 	b.Raw("MOVD $0, R3").
 		Label("uloop"). // stride 16, eight accumulators
 		Raw("ADD $16, R3, R4").Raw("CMP R1, R4").Raw("BGT ufold").
@@ -250,7 +257,7 @@ func sumF64() *arm64.Builder {
 func ssdF64() *arm64.Builder {
 	b := arm64.NewFunc("sumSqDiffNEON", dotSig(abi.Float64), 0)
 	b.LoadArg("a_base", "R0").LoadArg("a_len", "R1").LoadArg("b_base", "R2")
-	zeroAccs(b)
+	zeroAccs(b, 16)
 	b.Raw("MOVD $0, R3").
 		Label("uloop"). // stride 16, eight accumulators
 		Raw("ADD $16, R3, R4").Raw("CMP R1, R4").Raw("BGT ufold").
@@ -305,7 +312,7 @@ func ssdF64() *arm64.Builder {
 func dotF32() *arm64.Builder {
 	b := arm64.NewFunc("dot32NEON", dotSig(abi.Float32), 0)
 	b.LoadArg("a_base", "R0").LoadArg("a_len", "R1").LoadArg("b_base", "R2")
-	zeroAccs(b)
+	zeroAccs(b, 32)
 	b.Raw("MOVD $0, R3").
 		Label("uloop"). // stride 32, eight accumulators
 		Raw("ADD $32, R3, R4").Raw("CMP R1, R4").Raw("BGT ufold").
@@ -346,7 +353,7 @@ func dotF32() *arm64.Builder {
 func sumF32() *arm64.Builder {
 	b := arm64.NewFunc("sum32NEON", sumSig(abi.Float32), 0)
 	b.LoadArg("a_base", "R0").LoadArg("a_len", "R1")
-	zeroAccs(b)
+	zeroAccs(b, 32)
 	b.Raw("MOVD $0, R3").
 		Label("uloop"). // stride 32, eight accumulators
 		Raw("ADD $32, R3, R4").Raw("CMP R1, R4").Raw("BGT ufold").
@@ -383,7 +390,7 @@ func sumF32() *arm64.Builder {
 func ssdF32() *arm64.Builder {
 	b := arm64.NewFunc("sumSqDiff32NEON", dotSig(abi.Float32), 0)
 	b.LoadArg("a_base", "R0").LoadArg("a_len", "R1").LoadArg("b_base", "R2")
-	zeroAccs(b)
+	zeroAccs(b, 32)
 	b.Raw("MOVD $0, R3").
 		Label("uloop"). // stride 32, eight accumulators
 		Raw("ADD $32, R3, R4").Raw("CMP R1, R4").Raw("BGT ufold").
