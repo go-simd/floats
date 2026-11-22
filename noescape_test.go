@@ -28,6 +28,12 @@ func TestKernelsKeepCallerSlicesOnStack(t *testing.T) {
 		Mul(d[:], a[:], b[:])
 		Div(d[:], a[:], c[:])
 		Sqrt(d[:], a[:])
+		var d32 [64]float32
+		Add32(d32[:], a32[:], b32[:])
+		Sub32(d32[:], a32[:], b32[:])
+		Mul32(d32[:], a32[:], b32[:])
+		Div32(d32[:], a32[:], b32[:])
+		Sqrt32(d32[:], a32[:])
 		Clamp(d[:], a[:], b[:], c[:])
 		ClampScalar(d[:], a[:], 1, 2)
 		Axpby3(d[:], 1, a[:], 2, b[:], 3, c[:])
