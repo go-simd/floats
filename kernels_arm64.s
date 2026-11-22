@@ -275,43 +275,34 @@ TEXT ·axpyNEON(SB), NOSPLIT, $0-56
 	MOVD x_base+8(FP), R0
 	MOVD x_len+16(FP), R1
 	MOVD y_base+32(FP), R2
-	MOVD $0, R3
+	MOVD R2, R3
 uloop:
-	ADD $8, R3, R4
-	CMP R1, R4
-	BGT vloop
-	ADD R3<<3, R0, R5
-	ADD R3<<3, R2, R6
-	VLD1 (R5), [V1.D2, V2.D2, V3.D2, V4.D2]
-	VLD1 (R6), [V5.D2, V6.D2, V7.D2, V8.D2]
+	CMP $8, R1
+	BLT vloop
+	VLD1.P 64(R0), [V1.D2, V2.D2, V3.D2, V4.D2]
+	VLD1.P 64(R2), [V5.D2, V6.D2, V7.D2, V8.D2]
 	VFMLA V31.D2, V1.D2, V5.D2
 	VFMLA V31.D2, V2.D2, V6.D2
 	VFMLA V31.D2, V3.D2, V7.D2
 	VFMLA V31.D2, V4.D2, V8.D2
-	VST1 [V5.D2, V6.D2, V7.D2, V8.D2], (R6)
-	ADD $8, R3, R3
+	VST1.P [V5.D2, V6.D2, V7.D2, V8.D2], 64(R3)
+	SUB $8, R1, R1
 	B uloop
 vloop:
-	ADD $2, R3, R4
-	CMP R1, R4
-	BGT sloop
-	ADD R3<<3, R0, R5
-	VLD1 (R5), [V1.D2]
-	ADD R3<<3, R2, R6
-	VLD1 (R6), [V5.D2]
+	CMP $2, R1
+	BLT sloop
+	VLD1.P 16(R0), [V1.D2]
+	VLD1.P 16(R2), [V5.D2]
 	VFMLA V31.D2, V1.D2, V5.D2
-	VST1 [V5.D2], (R6)
-	ADD $2, R3, R3
+	VST1.P [V5.D2], 16(R3)
+	SUB $2, R1, R1
 	B vloop
 sloop:
-	CMP R1, R3
-	BGE done
-	FMOVD (R0)(R3<<3), F1
-	FMOVD (R2)(R3<<3), F2
+	CBZ R1, done
+	FMOVD (R0), F1
+	FMOVD (R2), F2
 	FMADDD F31, F2, F1, F2
-	FMOVD F2, (R2)(R3<<3)
-	ADD $1, R3, R3
-	B sloop
+	FMOVD F2, (R3)
 done:
 	RET
 
