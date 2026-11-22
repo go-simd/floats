@@ -512,3 +512,50 @@ done:
 	FMOVS F0, ret+48(FP)
 	RET
 
+TEXT ·axpyVX(SB), NOSPLIT, $0-56
+	MOVD x_base+8(FP), R1
+	MOVD x_len+16(FP), R2
+	MOVD y_base+32(FP), R3
+	FMOVD alpha+0(FP), F0
+	VLREPG alpha+0(FP), V3
+uloop:
+	CMPBLT R2, $8, vloop
+	VL (R1), V1
+	VL 16(R1), V2
+	VL 32(R1), V4
+	VL 48(R1), V5
+	VL (R3), V6
+	VL 16(R3), V7
+	VL 32(R3), V8
+	VL 48(R3), V9
+	VFMADB V1, V3, V6, V6
+	VFMADB V2, V3, V7, V7
+	VFMADB V4, V3, V8, V8
+	VFMADB V5, V3, V9, V9
+	VST V6, (R3)
+	VST V7, 16(R3)
+	VST V8, 32(R3)
+	VST V9, 48(R3)
+	ADD $64, R1
+	ADD $64, R3
+	SUB $8, R2
+	BR uloop
+vloop:
+	CMPBLT R2, $2, sloop
+	VL (R1), V1
+	VL (R3), V6
+	VFMADB V1, V3, V6, V6
+	VST V6, (R3)
+	ADD $16, R1
+	ADD $16, R3
+	SUB $2, R2
+	BR vloop
+sloop:
+	CMPBEQ R2, $0, done
+	FMOVD (R1), F1
+	FMOVD (R3), F2
+	FMADD F0, F1, F2
+	FMOVD F2, (R3)
+done:
+	RET
+

@@ -333,7 +333,42 @@ func mem(base string, off int) string {
 // axpyF64: y[i] = fma(alpha, x[i], y[i]).
 func axpyF64() *amd64.Builder {
 	b := amd64.NewFunc("axpyAVX2", axpySig("alpha"), 0)
-	b.LoadArg("alpha", "X0").LoadArg("x_base", "SI").LoadArg("x_len", "CX").LoadArg("y_base", "DI").
+	// The dispatch lives here so that axpy is one call and inlines into Axpy
+	// (one call level less, which is the whole cost for 4..15 elements): a CPU
+	// without AVX2+FMA tail-jumps to the Go reference with the same frame.
+	b.Raw("CMPB ·hasAVX2FMA(SB), $0").Raw("JEQ noavx").
+		LoadArg("alpha", "X0").LoadArg("x_base", "SI").LoadArg("x_len", "CX").LoadArg("y_base", "DI").
+		Raw("CMPQ CX, $16").Raw("JGE big").
+		// n < 16: XMM registers only. No YMM register is touched, so there is
+		// no VZEROUPPER, and the broadcast is a VMOVDDUP; for a handful of
+		// elements those fixed costs dominate the 4-wide kernel. Every element
+		// is one VFMADD231, bit-identical to math.FMA. Only indices < n are
+		// accessed: the 4-wide loop runs while i+4 <= n, the 2-wide step while
+		// i+2 <= n, and the tail is scalar (at most one element).
+		Raw("VMOVDDUP X0, X2").
+		Raw("XORQ AX, AX").
+		Label("qloop").
+		Raw("LEAQ 4(AX), R8").Raw("CMPQ R8, CX").Raw("JGT dstep").
+		Raw("VMOVUPD (DI)(AX*8), X3").
+		Raw("VMOVUPD 16(DI)(AX*8), X4").
+		Raw("VFMADD231PD (SI)(AX*8), X2, X3").
+		Raw("VFMADD231PD 16(SI)(AX*8), X2, X4").
+		Raw("VMOVUPD X3, (DI)(AX*8)").
+		Raw("VMOVUPD X4, 16(DI)(AX*8)").
+		Raw("ADDQ $4, AX").Raw("JMP qloop").
+		Label("dstep").
+		Raw("LEAQ 2(AX), R8").Raw("CMPQ R8, CX").Raw("JGT stail").
+		Raw("VMOVUPD (DI)(AX*8), X3").
+		Raw("VFMADD231PD (SI)(AX*8), X2, X3").
+		Raw("VMOVUPD X3, (DI)(AX*8)").
+		Raw("ADDQ $2, AX").
+		Label("stail").
+		Raw("CMPQ AX, CX").Raw("JGE sdone").
+		Raw("VMOVSD (DI)(AX*8), X1").
+		Raw("VFMADD231SD (SI)(AX*8), X0, X1").
+		Raw("VMOVSD X1, (DI)(AX*8)").
+		Label("sdone").Ret().
+		Label("big").
 		Raw("VBROADCASTSD X0, Y0")
 	elemLoop(b, func(off int, r string) {
 		b.Raw("VMOVUPD %s, %s", mem("DI", off), r).
@@ -344,7 +379,9 @@ func axpyF64() *amd64.Builder {
 			Raw("VFMADD231SD (SI)(AX*8), X0, X1").
 			Raw("VMOVSD X1, (DI)(AX*8)")
 	})
-	b.Raw("VZEROUPPER").Ret()
+	b.Raw("VZEROUPPER").Ret().
+		Label("noavx").
+		Raw("JMP ·axpyRefNoInline(SB)")
 	return b
 }
 

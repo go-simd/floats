@@ -18,7 +18,10 @@ package floats
 // The updated slices are bit-identical to the amd64 and arm64 kernels' either
 // way; only AxpyDot's returned sum may differ in the last bits (lane order).
 
-func axpy(alpha float64, x, y []float64)               { axpyRef(alpha, x, y) }
+// axpy (axpy_nos390x.go) is the one exception: s390x has a vector kernel for it,
+// measured on real z17 silicon against the kernel go-images and go-gfx used to
+// carry (the portable loop was 1.5x slower from 64 elements up).
+
 func xpby(beta float64, x, y []float64)                { xpbyRef(beta, x, y) }
 func axpyDot(alpha float64, x, y, w []float64) float64 { return axpyDotRef(alpha, x, y, w) }
 func scale(alpha float64, x []float64)                 { scaleRef(alpha, x) }
