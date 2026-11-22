@@ -342,6 +342,25 @@ tests run on a CI runner and fail, not skip, when AVX2+FMA is missing there
 Measured, 38 complex numbers (one SBR predictor lag): Ryzen 9 7950X 47 to 10.7 ns (4.4x), M4
 Max 47 to 18 ns (2.6x).
 
+### `CMulTo`: the pointwise complex product
+
+`CMulTo(dst, a, b []complex128)` writes `dst[i] = a[i]*b[i]` for `i < len(dst)` (NumPy's
+`multiply` on complex128): the chirp and spectral products of Bluestein's algorithm, the
+filter of a frequency-domain convolution. It panics, before writing anything, if `a` or `b` is
+shorter than `dst`; `dst` may be `a` or `b` exactly (in place), any other overlap is
+undefined. The AVX2+FMA kernel takes four numbers per step with one multiply and one
+`VFMADDSUB231PD` per two numbers (real part `fma(ar, br, -(ai*bi))`); the NEON kernel
+de-interleaves with `VLD2` and uses `VFMLS`/`VFMLA`; other CPUs run Go's complex product.
+The contract is a bound, not bit identity: each part is within 2 eps (2^-52) of `|a|·|b|`
+of the exact product, plus 64 smallest subnormals when a product underflows (the fused
+and the unfused forms both meet it), asserted against a 300-bit `math/big` oracle by
+`TestCMulToOracle`, with in-place, panic-before-write, guard-page, noescape and fuzz tests.
+Measured on one core, against the scalar Go loop: Ryzen 9 7950X 2.2x at 1024 numbers
+(287 ns against 621) and 1.8x at 65536; `np.multiply` there 772 ns and 24.4 us, so 2.7x
+and 1.1x faster. M4 Max (under load, not a valid table): 1.3x to 2.6x faster from 64 numbers
+on, a tie at 16. It equals go-fft's AVX2 kernel from 256 numbers (memory bound) and is 0.9 ns
+behind it at 16 and 64 (the call overhead).
+
 ### Elementwise `Add`, `Sub`, `Div`, `Sqrt`, `ClampScalar` (float64)
 
 | function | computes |
