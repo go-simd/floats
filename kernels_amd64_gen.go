@@ -5,13 +5,13 @@
 // differences, plus the float64 elementwise updates Axpy, Xpby, AxpyDot and
 // Scale (see the section at the end of this file).
 //
-// Each reduction kernel keeps one wide YMM accumulator (4×f64 or 8×f32), folds the bulk
-// of the slice into it with VFMADD231P{D,S} / VADDP{D,S} at the vector stride,
-// then horizontally reduces the accumulator to a scalar and finishes the tail
-// (< stride elements) with scalar FMA/add. The horizontal fold is
-// VEXTRACTF128 + VADDP{D,S} (256→128) then per-element shuffles, so the kernel
-// reduces in roughly the same lane-blocked order as the scalar reference; the
-// differential tests pin the result to a tight ULP bound.
+// Each reduction kernel keeps redK (8) independent wide YMM accumulators (4×f64
+// or 8×f32 each; see redLoops), folds the bulk of the slice into them with
+// VFMADD231P{D,S} / VADDP{D,S}, sums them in a tree, then horizontally reduces
+// to a scalar and finishes the tail (< stride elements) with scalar FMA/add. The
+// summation order is therefore not the lane-blocked order of the scalar
+// reference: reduce_bound_test.go asserts each result against a math/big oracle
+// with the gamma_n * sum|terms| bound.
 //
 // Operand order: Plan 9 AVX three-operand form is `OP src2, src1, dst`, and the
 // 231 FMA computes dst += src1*src2 — i.e. `VFMADD231PD b, a, acc` is
@@ -92,6 +92,72 @@ func main() {
 	fmt.Println("wrote kernels_amd64.s")
 }
 
+// ---- multi-accumulator reduction skeleton ----
+//
+// A reduction folds each product (or element) into an accumulator with a
+// loop-carried dependency: one FMA/ADD per iteration is bound by the
+// instruction's LATENCY (4 cycles for VFMADD on Zen 3/4 and Intel, 2 ports),
+// not by its throughput, so a single accumulator runs at 1/4..1/8 of the load
+// bandwidth on cache-resident data. redK independent YMM accumulators
+// (Y0..Y{redK-1}) are filled K*lanes elements per pass (the ×K loop), summed in
+// a balanced tree (halving), and the sub-K*lanes remainder is folded into Y0 one
+// vector at a time (the vloop, which is also the whole path for n < K*lanes, so
+// short vectors cost what they cost before), before the horizontal reduce and
+// the scalar tail the caller emits after Label("vtail").
+//
+// The order of summation changes with K; the accuracy contract is the standard
+// recursive-summation bound gamma_n * sum|terms| (see the oracle tests).
+const redK = 8
+
+// redLoops emits the zeroing, the ×redK loop, the accumulator tree, and the
+// single-vector loop, ending at Label("vtail") with the total in Y0. body emits
+// the update of accumulator acc from the elements at byte offset off of the
+// vector index, using Y(8+) temp t; m(base, off) is the addressing helper.
+func redLoops(b *amd64.Builder, f32 bool, body func(acc string, off int, t string, m func(base string, off int) string)) {
+	lanes, esz, xor, add := 4, 8, "VXORPD", "VADDPD"
+	if f32 {
+		lanes, esz, xor, add = 8, 4, "VXORPS", "VADDPS"
+	}
+	m := func(base string, off int) string {
+		if off == 0 {
+			return fmt.Sprintf("(%s)(DI*%d)", base, esz)
+		}
+		return fmt.Sprintf("%d(%s)(DI*%d)", off, base, esz)
+	}
+	// Short vectors skip the multi-accumulator machinery (zeroing, and the
+	// log2(K)-deep add tree, which alone costs ~9 cycles of latency): fewer than
+	// one vector goes straight to the scalar tail, fewer than K vectors to the
+	// single-accumulator loop.
+	b.Raw("XORQ DI, DI").
+		Raw("CMPQ CX, $%d", lanes).Raw("JGE notiny").
+		Raw("%s X0, X0, X0", xor).Raw("JMP sloop").
+		Label("notiny").
+		Raw("CMPQ CX, $%d", redK*lanes).Raw("JLT medium")
+	for k := 0; k < redK; k++ {
+		b.Raw("%s Y%d, Y%d, Y%d", xor, k, k, k)
+	}
+	b.Label("uloop").
+		Raw("LEAQ %d(DI), R8", redK*lanes).Raw("CMPQ R8, CX").Raw("JGT cloop")
+	for k := 0; k < redK; k++ {
+		body(fmt.Sprintf("Y%d", k), 32*k, fmt.Sprintf("Y%d", 8+k), m)
+	}
+	b.Raw("ADDQ $%d, DI", redK*lanes).Raw("JMP uloop").
+		Label("cloop")
+	for h := redK / 2; h >= 1; h /= 2 {
+		for k := 0; k < h; k++ {
+			b.Raw("%s Y%d, Y%d, Y%d", add, k+h, k, k)
+		}
+	}
+	b.Raw("JMP vloop").
+		Label("medium").
+		Raw("%s Y0, Y0, Y0", xor).
+		Label("vloop").
+		Raw("LEAQ %d(DI), R8", lanes).Raw("CMPQ R8, CX").Raw("JGT vtail")
+	body("Y0", 0, "Y8", m)
+	b.Raw("ADDQ $%d, DI", lanes).Raw("JMP vloop").
+		Label("vtail")
+}
+
 // ---- float64 (4 lanes/YMM, 8-byte elements) ----
 
 // reduceF64 folds Y0 (4×f64) down to the scalar in X0 low lane.
@@ -104,16 +170,11 @@ func reduceF64(b *amd64.Builder) {
 
 func dotF64() *amd64.Builder {
 	b := amd64.NewFunc("dotAVX2", dotSig(abi.Float64), 0)
-	b.LoadArg("a_base", "AX").LoadArg("a_len", "CX").LoadArg("b_base", "BX").
-		Raw("VXORPD Y0, Y0, Y0"). // accumulator = 0
-		Raw("XORQ DI, DI").       // i = 0
-		Label("vloop").
-		Raw("LEAQ 4(DI), R8").Raw("CMPQ R8, CX").Raw("JGT vtail").
-		Raw("VMOVUPD (AX)(DI*8), Y1").
-		Raw("VMOVUPD (BX)(DI*8), Y2").
-		Raw("VFMADD231PD Y2, Y1, Y0"). // acc += a*b
-		Raw("ADDQ $4, DI").Raw("JMP vloop").
-		Label("vtail")
+	b.LoadArg("a_base", "AX").LoadArg("a_len", "CX").LoadArg("b_base", "BX")
+	redLoops(b, false, func(acc string, off int, t string, m func(string, int) string) {
+		b.Raw("VMOVUPD %s, %s", m("AX", off), t).
+			Raw("VFMADD231PD %s, %s, %s", m("BX", off), t, acc) // acc += a*b
+	})
 	reduceF64(b)
 	b.Label("sloop").
 		Raw("CMPQ DI, CX").Raw("JGE done").
@@ -127,14 +188,10 @@ func dotF64() *amd64.Builder {
 
 func sumF64() *amd64.Builder {
 	b := amd64.NewFunc("sumAVX2", sumSig(abi.Float64), 0)
-	b.LoadArg("a_base", "AX").LoadArg("a_len", "CX").
-		Raw("VXORPD Y0, Y0, Y0").
-		Raw("XORQ DI, DI").
-		Label("vloop").
-		Raw("LEAQ 4(DI), R8").Raw("CMPQ R8, CX").Raw("JGT vtail").
-		Raw("VADDPD (AX)(DI*8), Y0, Y0").
-		Raw("ADDQ $4, DI").Raw("JMP vloop").
-		Label("vtail")
+	b.LoadArg("a_base", "AX").LoadArg("a_len", "CX")
+	redLoops(b, false, func(acc string, off int, t string, m func(string, int) string) {
+		b.Raw("VADDPD %s, %s, %s", m("AX", off), acc, acc)
+	})
 	reduceF64(b)
 	b.Label("sloop").
 		Raw("CMPQ DI, CX").Raw("JGE done").
@@ -146,16 +203,12 @@ func sumF64() *amd64.Builder {
 
 func ssdF64() *amd64.Builder {
 	b := amd64.NewFunc("sumSqDiffAVX2", dotSig(abi.Float64), 0)
-	b.LoadArg("a_base", "AX").LoadArg("a_len", "CX").LoadArg("b_base", "BX").
-		Raw("VXORPD Y0, Y0, Y0").
-		Raw("XORQ DI, DI").
-		Label("vloop").
-		Raw("LEAQ 4(DI), R8").Raw("CMPQ R8, CX").Raw("JGT vtail").
-		Raw("VMOVUPD (AX)(DI*8), Y1").
-		Raw("VSUBPD (BX)(DI*8), Y1, Y1"). // d = a-b
-		Raw("VFMADD231PD Y1, Y1, Y0").    // acc += d*d
-		Raw("ADDQ $4, DI").Raw("JMP vloop").
-		Label("vtail")
+	b.LoadArg("a_base", "AX").LoadArg("a_len", "CX").LoadArg("b_base", "BX")
+	redLoops(b, false, func(acc string, off int, t string, m func(string, int) string) {
+		b.Raw("VMOVUPD %s, %s", m("AX", off), t).
+			Raw("VSUBPD %s, %s, %s", m("BX", off), t, t). // d = a-b
+			Raw("VFMADD231PD %s, %s, %s", t, t, acc)      // acc += d*d
+	})
 	reduceF64(b)
 	b.Label("sloop").
 		Raw("CMPQ DI, CX").Raw("JGE done").
@@ -180,16 +233,11 @@ func reduceF32(b *amd64.Builder) {
 
 func dotF32() *amd64.Builder {
 	b := amd64.NewFunc("dot32AVX2", dotSig(abi.Float32), 0)
-	b.LoadArg("a_base", "AX").LoadArg("a_len", "CX").LoadArg("b_base", "BX").
-		Raw("VXORPS Y0, Y0, Y0").
-		Raw("XORQ DI, DI").
-		Label("vloop").
-		Raw("LEAQ 8(DI), R8").Raw("CMPQ R8, CX").Raw("JGT vtail").
-		Raw("VMOVUPS (AX)(DI*4), Y1").
-		Raw("VMOVUPS (BX)(DI*4), Y2").
-		Raw("VFMADD231PS Y2, Y1, Y0").
-		Raw("ADDQ $8, DI").Raw("JMP vloop").
-		Label("vtail")
+	b.LoadArg("a_base", "AX").LoadArg("a_len", "CX").LoadArg("b_base", "BX")
+	redLoops(b, true, func(acc string, off int, t string, m func(string, int) string) {
+		b.Raw("VMOVUPS %s, %s", m("AX", off), t).
+			Raw("VFMADD231PS %s, %s, %s", m("BX", off), t, acc)
+	})
 	reduceF32(b)
 	b.Label("sloop").
 		Raw("CMPQ DI, CX").Raw("JGE done").
@@ -203,14 +251,10 @@ func dotF32() *amd64.Builder {
 
 func sumF32() *amd64.Builder {
 	b := amd64.NewFunc("sum32AVX2", sumSig(abi.Float32), 0)
-	b.LoadArg("a_base", "AX").LoadArg("a_len", "CX").
-		Raw("VXORPS Y0, Y0, Y0").
-		Raw("XORQ DI, DI").
-		Label("vloop").
-		Raw("LEAQ 8(DI), R8").Raw("CMPQ R8, CX").Raw("JGT vtail").
-		Raw("VADDPS (AX)(DI*4), Y0, Y0").
-		Raw("ADDQ $8, DI").Raw("JMP vloop").
-		Label("vtail")
+	b.LoadArg("a_base", "AX").LoadArg("a_len", "CX")
+	redLoops(b, true, func(acc string, off int, t string, m func(string, int) string) {
+		b.Raw("VADDPS %s, %s, %s", m("AX", off), acc, acc)
+	})
 	reduceF32(b)
 	b.Label("sloop").
 		Raw("CMPQ DI, CX").Raw("JGE done").
@@ -222,16 +266,12 @@ func sumF32() *amd64.Builder {
 
 func ssdF32() *amd64.Builder {
 	b := amd64.NewFunc("sumSqDiff32AVX2", dotSig(abi.Float32), 0)
-	b.LoadArg("a_base", "AX").LoadArg("a_len", "CX").LoadArg("b_base", "BX").
-		Raw("VXORPS Y0, Y0, Y0").
-		Raw("XORQ DI, DI").
-		Label("vloop").
-		Raw("LEAQ 8(DI), R8").Raw("CMPQ R8, CX").Raw("JGT vtail").
-		Raw("VMOVUPS (AX)(DI*4), Y1").
-		Raw("VSUBPS (BX)(DI*4), Y1, Y1").
-		Raw("VFMADD231PS Y1, Y1, Y0").
-		Raw("ADDQ $8, DI").Raw("JMP vloop").
-		Label("vtail")
+	b.LoadArg("a_base", "AX").LoadArg("a_len", "CX").LoadArg("b_base", "BX")
+	redLoops(b, true, func(acc string, off int, t string, m func(string, int) string) {
+		b.Raw("VMOVUPS %s, %s", m("AX", off), t).
+			Raw("VSUBPS %s, %s, %s", m("BX", off), t, t).
+			Raw("VFMADD231PS %s, %s, %s", t, t, acc)
+	})
 	reduceF32(b)
 	b.Label("sloop").
 		Raw("CMPQ DI, CX").Raw("JGE done").
