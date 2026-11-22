@@ -33,6 +33,7 @@ type AllPass3Plan struct {
 	w        [3][]complex128
 	wStride  [3]int
 	wSlots   [3]int
+	inDelay  int
 }
 
 // NewAllPass3Plan proves the memory of n = len(t.Phi) rows and returns the plan. It
@@ -126,4 +127,51 @@ func (p *AllPass3Plan) Run(inSlot int, oldSlot, curSlot [3]int) {
 	}
 	s := p.inStride
 	allPass3(p.n, p.out, p.in[inSlot*s:inSlot*s+p.n], &p.t, &old, &cur)
+}
+
+// NewAllPass3TickPlan is NewAllPass3Plan for a decorrelator driven by a tick counter: the
+// plan keeps inDelay, the age in ticks of the input slot that RunTick reads. It refuses,
+// besides the cases of NewAllPass3Plan, an inDelay that is negative or not below the number
+// of slots of the input ring.
+func NewAllPass3TickPlan(t *AllPassRows, out, in []complex128, inStride int, w [3][]complex128, wStride [3]int, inDelay int) (*AllPass3Plan, error) {
+	p, err := NewAllPass3Plan(t, out, in, inStride, w, wStride)
+	if err != nil {
+		return nil, err
+	}
+	if inDelay < 0 || inDelay >= p.inSlots {
+		return nil, fmt.Errorf("floats: AllPass3Plan: input delay %d outside [0, %d)", inDelay, p.inSlots)
+	}
+	p.inDelay = inDelay
+	return p, nil
+}
+
+// RunTick is Run for tick t: link l, whose ring holds m slots, reads slot (t+1) mod m and
+// writes slot t mod m; the input is slot (t - inDelay) mod s of the input ring of s slots
+// (inDelay is 0 for a plan from NewAllPass3Plan). The slots follow from t and from sizes
+// proved at construction (every ring of a link holds at least two slots, so no link reads
+// the slot it writes, and every slot is in range), so a call checks nothing and cannot
+// panic for any t, negative or not. For t >= 0 the result is bit-identical to Run on those
+// slots; a negative t reduces as uint(t) does, memory-safe but not continuous.
+func (p *AllPass3Plan) RunTick(t int) {
+	var old, cur [3][]complex128
+	u := uint(t)
+	for l := range old {
+		m := uint(p.wSlots[l])
+		c := u % m
+		o := c + 1
+		if o == m {
+			o = 0
+		}
+		s := uint(p.wStride[l])
+		n := uint(p.n)
+		old[l] = p.w[l][o*s : o*s+n]
+		cur[l] = p.w[l][c*s : c*s+n]
+	}
+	k := uint(p.inSlots)
+	i := u%k + k - uint(p.inDelay)
+	if i >= k {
+		i -= k
+	}
+	s := uint(p.inStride)
+	allPass3(p.n, p.out, p.in[i*s:i*s+uint(p.n)], &p.t, &old, &cur)
 }
