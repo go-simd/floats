@@ -385,7 +385,9 @@ scalar Go loop: 5.7 ns against 10.9 at 16 numbers, 13.4 against 39.9 at 64, 295 
 at 1024 (1.9x to 3x); against go-fft's former unfused AVX2 kernel it is 0.2 ns faster at 16,
 0.5 at 32, 0.8 at 64, 1.4 at 128, 2.6 at 256, 8.5 at 512 and 2 ns (0.7 %) slower at 1024
 (memory bound). The v0.32.0 kernel with its Go tail was 6.7 ns at 16. `np.multiply` there
-was 772 ns at 1024 numbers (earlier measurement).
+was 772 ns at 1024 numbers (earlier measurement). Neoverse-N2 (GitHub arm64 runner, load
+0.3, interleaved): 16.0 ns against 19.9 for the Go loop at 16 numbers (23.1 for the v0.32.0
+NEON kernel), 55.8 against 72.5 at 64, 857 against 1135 at 1024.
 
 ### Elementwise `Add`, `Sub`, `Div`, `Sqrt`, `ClampScalar` (float64)
 
