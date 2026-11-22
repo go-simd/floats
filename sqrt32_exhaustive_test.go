@@ -1,5 +1,3 @@
-//go:build amd64 || arm64
-
 package floats
 
 import (
@@ -23,14 +21,18 @@ import (
 //
 // On amd64 both the AVX2 and the SSE2 kernels are run. About 10 s per kernel on
 // one core of an Apple M-series; the work is spread over every CPU. Skipped with
-// -short. The other architectures (qemu lanes, no float32 kernel) are covered by
-// the sampled tests of binop32_test.go.
+// -short. The emulated architectures (loong64, ppc64le, riscv64, s390x: qemu
+// lanes) check the bit patterns j*sqrt32Step (sqrt32Step odd, so a sample that
+// varies every bit position) instead of all of them: binop32_gate_<arch>_test.go.
+// The specials (NaN, ±0, ±Inf, subnormals, powers of two) are in
+// TestSqrt32Specials and the random cases of binop32_test.go on every lane.
 func TestSqrt32Exhaustive(t *testing.T) {
 	if testing.Short() {
 		t.Skip("exhaustive: 2^32 inputs")
 	}
 	runExhaustive := func(label string) {
 		const chunk = 1 << 16
+		const total = (1<<32 + sqrt32Step - 1) / sqrt32Step // patterns j*step < 2^32
 		var next, bad atomic.Uint64
 		var wg sync.WaitGroup
 		for w := 0; w < runtime.GOMAXPROCS(0); w++ {
@@ -40,17 +42,18 @@ func TestSqrt32Exhaustive(t *testing.T) {
 				in, out := make([]float32, chunk), make([]float32, chunk)
 				for bad.Load() == 0 {
 					c := next.Add(1) - 1
-					if c >= 1<<32/chunk {
+					first := c * chunk
+					if first >= total {
 						return
 					}
-					base := uint32(c * chunk)
-					for i := range in {
-						in[i] = math.Float32frombits(base + uint32(i))
+					n := min(chunk, total-first)
+					for i := uint64(0); i < n; i++ {
+						in[i] = math.Float32frombits(uint32((first + i) * sqrt32Step))
 					}
-					Sqrt32(out, in)
-					for i, x := range in {
+					Sqrt32(out[:n], in[:n])
+					for i, x := range in[:n] {
 						if !sqrt32Correct(x, out[i]) {
-							if bad.CompareAndSwap(0, uint64(base)+uint64(i)+1) {
+							if bad.CompareAndSwap(0, uint64(math.Float32bits(x))+1) {
 								return
 							}
 						}
