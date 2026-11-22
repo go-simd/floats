@@ -5,7 +5,9 @@
 // the last two and one when n has those bits (go-simd/floats, "CMulTo: no s390x/ppc64le
 // kernel").
 //
-// A VSX register holds exactly one complex number. LXVD2X/STXVD2X move the doubleword at
+// Pairs of numbers (pair) are split into real and imaginary vectors, multiplied and
+// re-interleaved (fewer permutes: the form below lost to Go's loop on POWER9); a last
+// odd number uses the form below. A VSX register holds exactly one complex number. LXVD2X/STXVD2X move the doubleword at
 // the lower address to doubleword 0 of the register in either endianness, so with
 // doubleword numbering (which XXPERMDI uses) the real part is doubleword 0. For
 // c = (ar, ai) of a and w = (br, bi) of b:
@@ -53,6 +55,7 @@ func xx3(low, t, a, b int) string {
 
 func xvmuldp(t, a, b int) string   { return xx3(112<<3, t, a, b) }
 func xvmaddadp(t, a, b int) string { return xx3(97<<3, t, a, b) }
+func xvmsubadp(t, a, b int) string { return xx3(113<<3, t, a, b) }
 func xxpermdi(t, a, b, dm int) string {
 	return xx3(10<<3|dm<<8, t, a, b)
 }
@@ -91,13 +94,43 @@ func compute(b *ppc64.Builder, off, v int) {
 	b.Raw("STXVD2X VS%d, (R3)(%s)", p, idx(off))
 }
 
-// block emits k numbers (k <= 4): all loads, then the arithmetic.
+// pair emits two numbers split into real and imaginary vectors: loads at off and off+16
+// (c0 c1 = v v+1, w0 w1 = v+2 v+3), AR AI BR BI = v+4..v+7, then
+//
+//	T  = AI*BI                 XVMULDP (into v)
+//	RE = AR*BR - T             XVMSUBADP (into v)
+//	IM = AR*BI + AI*BR         XVMULDP, XVMADDADP (into v+1)
+//
+// and the two results re-interleaved by XXPERMDI: 8 permutes and arithmetic per two
+// numbers where the one-at-a-time form needs 12.
+func pair(b *ppc64.Builder, off, v int) {
+	c0, c1, w0, w1, ar, ai, br, bi := v, v+1, v+2, v+3, v+4, v+5, v+6, v+7
+	b.Raw("LXVD2X (R4)(%s), VS%d", idx(off), c0)
+	b.Raw("LXVD2X (R4)(%s), VS%d", idx(off+16), c1)
+	b.Raw("LXVD2X (R5)(%s), VS%d", idx(off), w0)
+	b.Raw("LXVD2X (R5)(%s), VS%d", idx(off+16), w1)
+	b.Raw("%s", xxpermdi(ar, c0, c1, 0))
+	b.Raw("%s", xxpermdi(ai, c0, c1, 3))
+	b.Raw("%s", xxpermdi(br, w0, w1, 0))
+	b.Raw("%s", xxpermdi(bi, w0, w1, 3))
+	b.Raw("%s", xvmuldp(c0, ai, bi))
+	b.Raw("%s", xvmsubadp(c0, ar, br))
+	b.Raw("%s", xvmuldp(c1, ar, bi))
+	b.Raw("%s", xvmaddadp(c1, ai, br))
+	b.Raw("%s", xxpermdi(w0, c0, c1, 0))
+	b.Raw("%s", xxpermdi(w1, c0, c1, 3))
+	b.Raw("STXVD2X VS%d, (R3)(%s)", w0, idx(off))
+	b.Raw("STXVD2X VS%d, (R3)(%s)", w1, idx(off+16))
+}
+
+// block emits k numbers (k <= 4): pairs, then the odd one.
 func block(b *ppc64.Builder, k int) {
-	for i := 0; i < k; i++ {
-		load(b, 16*i, 32+8*i)
+	for i := 0; i+1 < k; i += 2 {
+		pair(b, 16*i, 32+8*i)
 	}
-	for i := 0; i < k; i++ {
-		compute(b, 16*i, 32+8*i)
+	if k%2 == 1 {
+		load(b, 16*(k-1), 32+8*(k-1))
+		compute(b, 16*(k-1), 32+8*(k-1))
 	}
 }
 

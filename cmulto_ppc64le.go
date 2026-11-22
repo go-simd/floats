@@ -20,9 +20,10 @@ func cmulToVSX(dst, a, b *float64, n int)
 // (measured in the pull request); below it the loop wins.
 const cmulToVSXMin = 32
 
-// cmulToVSXOn is true on POWER8 only: on POWER9 and later the scalar FP pipes of the Go
-// loop beat the permute-heavy kernel by 11 to 30 %, so those run the loop.
-var cmulToVSXOn = cpu.PPC64.IsPOWER8 && !cpu.PPC64.IsPOWER9
+// cmulToVSXOn is the VSX gate (POWER8 and later). The first variant, one number per
+// register, lost to the Go loop on POWER9 by 11 to 30 %; splitting two numbers into real
+// and imaginary vectors (fewer permutes) wins on POWER9 and POWER8 alike.
+var cmulToVSXOn = cpu.PPC64.IsPOWER8
 
 func cmulTo(dst, a, b []complex128) {
 	if cmulToVSXOn && len(dst) >= cmulToVSXMin {
