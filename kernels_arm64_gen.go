@@ -5,20 +5,20 @@
 // plus the float64 elementwise updates Axpy, Xpby, AxpyDot and Scale (see the
 // section at the end of this file).
 //
-// The bulk loops fold with VFMLA (acc += a*b lane-wise). The sum kernels
-// accumulate against a broadcast 1.0 vector (acc += a*1, which rounds exactly
-// like acc + a); they were written against an assembler with no vector-FP add.
-// The Go 1.27 assembler has VFADD/VFSUB/VFADDP. The squared-difference kernels
-// form d = a−b exactly (VFSUB for float32; VFMLS against 1.0 for float64, see
-// ssdF64) before VFMLA d*d — which avoids the catastrophic cancellation of the
-// Σa²−2Σab+Σb² expansion on the distance hot path.
+// The bulk loops fold with VFMLA (acc += a*b lane-wise); the sum kernels use
+// VFADD. The squared-difference kernels form d = a−b exactly with VFSUB before
+// VFMLA d*d — which avoids the catastrophic cancellation of the Σa²−2Σab+Σb²
+// expansion on the distance hot path.
 //
-// The dot kernels keep four independent accumulators and unroll ×4 for
-// instruction-level parallelism (otherwise a single 2-wide accumulator loses to
-// the compiler's pipelined scalar FMADD loop on long vectors). The horizontal
-// fold extracts each lane to a GPR (VMOV), reinterprets it as a float
-// (FMOVD/FMOVS) and sums with scalar FADDD/FADDS; the tail finishes in F0 with
-// FMADDD/FMADDS (Fd = Fn*Fm + Fa).
+// All six reductions keep EIGHT independent accumulators (accRegs) and unroll to
+// 8 vector registers per iteration (16 float64 or 32 float32 elements): a
+// Neoverse core issues two vector FP ops per cycle with a latency of 4, so fewer
+// chains leave it latency-bound. The
+// accumulators fold with a balanced VFADD tree; the horizontal fold then
+// extracts each lane to a GPR (VMOV), reinterprets it as a float (FMOVD/FMOVS)
+// and sums with scalar FADDD/FADDS; the tail finishes in F0 with FMADDD/FMADDS
+// (Fd = Fn*Fm + Fa). The summation order is unspecified: the contract is the
+// error bound gamma_n * sum|terms| (reduce_bound_test.go).
 //
 // NEON is the ARMv8-A baseline, so there is no runtime feature gate.
 //
@@ -117,43 +117,75 @@ func foldS4(b *arm64.Builder) {
 
 // ---- float64: V0.D2 accumulator, stride 2 ----
 
-// dotF64 keeps four independent V0/V16/V17/V18 (each D2) accumulators and
-// unrolls the loop ×4 (stride 8) so four VFMLAs are in flight per iteration —
-// enough instruction-level parallelism to keep the FP units busy and beat the
-// compiler's single-accumulator scalar FMADD loop on wide vectors. The four
-// accumulators are combined (acc0 += accK*1 via VFMLA against a broadcast 1.0)
-// before the 2-lane fold; a 2-wide block loop then a scalar tail finish the
-// remainder.
+// accRegs are the eight accumulator registers of the reductions. A Neoverse
+// core issues two (N1/N2: 2 ASIMD pipes, FMLA latency 4) vector FP ops per cycle,
+// so eight independent chains are what keeps both pipes busy; four left Sum,
+// SumSqDiff and the float32 forms latency-bound.
+var accRegs = []int{0, 16, 17, 18, 20, 21, 22, 23}
+
+// zeroAccs clears V0 and sets the index R3 to zero, branches past the unrolled
+// loop (to ufoldend, after the fold) when fewer than stride elements are left,
+// and otherwise clears the other seven accumulators. A short input thus pays for
+// neither the zeroing nor the fold of eight accumulators.
+func zeroAccs(b *arm64.Builder, stride int) {
+	b.Raw("MOVD $0, R3")
+	b.Raw("VEOR V0.B16, V0.B16, V0.B16")
+	b.Raw("CMP $%d, R1", stride).Raw("BLT ufoldend")
+	for _, r := range accRegs[1:] {
+		b.Raw("VEOR V%d.B16, V%d.B16, V%d.B16", r, r, r)
+	}
+}
+
+// foldAccs adds the eight accumulators into V0 with a balanced tree (arr is the
+// arrangement, D2 or S4).
+func foldAccs(b *arm64.Builder, arr string) {
+	add := func(d, s int) {
+		b.Raw("VFADD V%d.%s, V%d.%s, V%d.%s", accRegs[s], arr, accRegs[d], arr, accRegs[d], arr)
+	}
+	add(0, 4)
+	add(1, 5)
+	add(2, 6)
+	add(3, 7)
+	add(0, 2)
+	add(1, 3)
+	add(0, 1)
+	b.Label("ufoldend")
+}
+
+// dotF64 keeps eight independent D2 accumulators (accRegs), 16 elements per
+// iteration, so eight VFMLAs are in flight and the FMA latency no longer bounds
+// the loop. The accumulators fold with a balanced VFADD tree before the 2-lane
+// fold; a 2-wide block loop then a scalar tail finish the remainder.
 func dotF64() *arm64.Builder {
 	b := arm64.NewFunc("dotNEON", dotSig(abi.Float64), 0)
-	b.LoadArg("a_base", "R0").LoadArg("a_len", "R1").LoadArg("b_base", "R2").
-		Raw("VEOR V0.B16, V0.B16, V0.B16").
-		Raw("VEOR V16.B16, V16.B16, V16.B16").
-		Raw("VEOR V17.B16, V17.B16, V17.B16").
-		Raw("VEOR V18.B16, V18.B16, V18.B16").
-		Raw("FMOVD $(1.0), F19").Raw("VDUP V19.D[0], V19.D2"). // ones, to combine accs
-		Raw("MOVD $0, R3").
-		Label("uloop"). // ×4 unrolled, stride 8
-		Raw("ADD $8, R3, R4").Raw("CMP R1, R4").Raw("BGT vloop").
+	b.LoadArg("a_base", "R0").LoadArg("a_len", "R1").LoadArg("b_base", "R2")
+	zeroAccs(b, 16)
+	b.Raw("MOVD $0, R3").
+		Label("uloop"). // stride 16
+		Raw("ADD $16, R3, R4").Raw("CMP R1, R4").Raw("BGT ufold").
 		Raw("ADD R3<<3, R0, R5").Raw("ADD R3<<3, R2, R6").
 		Raw("VLD1.P 64(R5), [V1.D2, V2.D2, V3.D2, V4.D2]").
-		Raw("VLD1.P 64(R6), [V5.D2, V6.D2, V7.D2, V8.D2]").
-		Raw("VFMLA V5.D2, V1.D2, V0.D2").
-		Raw("VFMLA V6.D2, V2.D2, V16.D2").
-		Raw("VFMLA V7.D2, V3.D2, V17.D2").
-		Raw("VFMLA V8.D2, V4.D2, V18.D2").
-		Raw("ADD $8, R3, R3").Raw("B uloop").
-		Label("vloop"). // combine the four accumulators into V0
-		Raw("VFMLA V19.D2, V16.D2, V0.D2").
-		Raw("VFMLA V19.D2, V17.D2, V0.D2").
-		Raw("VFMLA V19.D2, V18.D2, V0.D2").
-		Label("vloop2"). // 2-wide remainder
-		Raw("ADD $2, R3, R4").Raw("CMP R1, R4").Raw("BGT vtail").
-		Raw("ADD R3<<3, R0, R5").Raw("VLD1 (R5), [V1.D2]").
-		Raw("ADD R3<<3, R2, R6").Raw("VLD1 (R6), [V2.D2]").
-		Raw("VFMLA V2.D2, V1.D2, V0.D2").
-		Raw("ADD $2, R3, R3").Raw("B vloop2").
-		Label("vtail")
+		Raw("VLD1 (R5), [V5.D2, V6.D2, V7.D2, V8.D2]").
+		Raw("VLD1.P 64(R6), [V24.D2, V25.D2, V26.D2, V27.D2]").
+		Raw("VLD1 (R6), [V28.D2, V29.D2, V30.D2, V31.D2]").
+		Raw("VFMLA V24.D2, V1.D2, V0.D2").
+		Raw("VFMLA V25.D2, V2.D2, V16.D2").
+		Raw("VFMLA V26.D2, V3.D2, V17.D2").
+		Raw("VFMLA V27.D2, V4.D2, V18.D2").
+		Raw("VFMLA V28.D2, V5.D2, V20.D2").
+		Raw("VFMLA V29.D2, V6.D2, V21.D2").
+		Raw("VFMLA V30.D2, V7.D2, V22.D2").
+		Raw("VFMLA V31.D2, V8.D2, V23.D2").
+		Raw("ADD $16, R3, R3").Raw("B uloop").
+		Label("ufold")
+	foldAccs(b, "D2")
+	b.Label("vloop2"). // 2-wide remainder
+				Raw("ADD $2, R3, R4").Raw("CMP R1, R4").Raw("BGT vtail").
+				Raw("ADD R3<<3, R0, R5").Raw("VLD1 (R5), [V1.D2]").
+				Raw("ADD R3<<3, R2, R6").Raw("VLD1 (R6), [V2.D2]").
+				Raw("VFMLA V2.D2, V1.D2, V0.D2").
+				Raw("ADD $2, R3, R3").Raw("B vloop2").
+				Label("vtail")
 	foldD2(b)
 	b.Label("sloop").
 		Raw("CMP R1, R3").Raw("BGE done").
@@ -167,14 +199,29 @@ func dotF64() *arm64.Builder {
 
 func sumF64() *arm64.Builder {
 	b := arm64.NewFunc("sumNEON", sumSig(abi.Float64), 0)
-	b.LoadArg("a_base", "R0").LoadArg("a_len", "R1").
-		Raw("VEOR V0.B16, V0.B16, V0.B16").
-		Raw("FMOVD $(1.0), F3").Raw("VDUP V3.D[0], V3.D2"). // ones
-		Raw("MOVD $0, R3").
-		Label("vloop").
+	b.LoadArg("a_base", "R0").LoadArg("a_len", "R1")
+	zeroAccs(b, 16)
+	b.Raw("MOVD $0, R3").
+		Label("uloop"). // stride 16, eight accumulators
+		Raw("ADD $16, R3, R4").Raw("CMP R1, R4").Raw("BGT ufold").
+		Raw("ADD R3<<3, R0, R5").
+		Raw("VLD1.P 64(R5), [V1.D2, V2.D2, V3.D2, V4.D2]").
+		Raw("VLD1 (R5), [V5.D2, V6.D2, V7.D2, V8.D2]").
+		Raw("VFADD V1.D2, V0.D2, V0.D2").
+		Raw("VFADD V2.D2, V16.D2, V16.D2").
+		Raw("VFADD V3.D2, V17.D2, V17.D2").
+		Raw("VFADD V4.D2, V18.D2, V18.D2").
+		Raw("VFADD V5.D2, V20.D2, V20.D2").
+		Raw("VFADD V6.D2, V21.D2, V21.D2").
+		Raw("VFADD V7.D2, V22.D2, V22.D2").
+		Raw("VFADD V8.D2, V23.D2, V23.D2").
+		Raw("ADD $16, R3, R3").Raw("B uloop").
+		Label("ufold")
+	foldAccs(b, "D2")
+	b.Label("vloop").
 		Raw("ADD $2, R3, R4").Raw("CMP R1, R4").Raw("BGT vtail").
 		Raw("ADD R3<<3, R0, R5").Raw("VLD1 (R5), [V1.D2]").
-		Raw("VFMLA V3.D2, V1.D2, V0.D2"). // acc += a*1
+		Raw("VFADD V1.D2, V0.D2, V0.D2").
 		Raw("ADD $2, R3, R3").Raw("B vloop").
 		Label("vtail")
 	foldD2(b)
@@ -187,11 +234,11 @@ func sumF64() *arm64.Builder {
 	return b
 }
 
-// ssdF64 accumulates Σ(a−b)². The difference is formed with VFMLS against a
-// broadcast 1.0: copy a into V7, then V7 -= b*1 gives V7 = a−b exactly (×1 is
-// exact, one rounding), and VFMLA V7,V7,acc adds d². This avoids the
-// catastrophic cancellation that the Σa²−2Σab+Σb² expansion would suffer when
-// a≈b — the distance hot path.
+// ssdF64 accumulates Σ(a−b)². The 16-element bulk loop forms d with VFSUB; the
+// 2-wide tail forms it with VFMLS against a broadcast 1.0: copy a into V7, then
+// V7 -= b*1 gives V7 = a−b exactly (×1 is exact, one rounding), and VFMLA V7,V7,acc
+// adds d². This avoids the catastrophic cancellation that the Σa²−2Σab+Σb²
+// expansion would suffer when a≈b — the distance hot path.
 //
 // VFSUB (available since the Go 1.27 assembler) gives the same d bit for bit
 // and is what ssdF32 uses, but swapping it in here measured Distance/8 about 9%
@@ -209,19 +256,45 @@ func sumF64() *arm64.Builder {
 // 32-byte aligned one is slower here.
 func ssdF64() *arm64.Builder {
 	b := arm64.NewFunc("sumSqDiffNEON", dotSig(abi.Float64), 0)
-	b.LoadArg("a_base", "R0").LoadArg("a_len", "R1").LoadArg("b_base", "R2").
-		Raw("VEOR V0.B16, V0.B16, V0.B16").
-		Raw("FMOVD $(1.0), F3").Raw("VDUP V3.D[0], V3.D2"). // ones
-		Raw("MOVD $0, R3").
-		Label("vloop").
-		Raw("ADD $2, R3, R4").Raw("CMP R1, R4").Raw("BGT vtail").
-		Raw("ADD R3<<3, R0, R5").Raw("VLD1 (R5), [V1.D2]").
-		Raw("ADD R3<<3, R2, R6").Raw("VLD1 (R6), [V2.D2]").
-		Raw("VMOV V1.B16, V7.B16").       // d = a
-		Raw("VFMLS V3.D2, V2.D2, V7.D2"). // d -= b*1  => d = a-b
-		Raw("VFMLA V7.D2, V7.D2, V0.D2"). // acc += d*d
-		Raw("ADD $2, R3, R3").Raw("B vloop").
-		Label("vtail")
+	b.LoadArg("a_base", "R0").LoadArg("a_len", "R1").LoadArg("b_base", "R2")
+	zeroAccs(b, 16)
+	b.Raw("MOVD $0, R3").
+		Label("uloop"). // stride 16, eight accumulators
+		Raw("ADD $16, R3, R4").Raw("CMP R1, R4").Raw("BGT ufold").
+		Raw("ADD R3<<3, R0, R5").Raw("ADD R3<<3, R2, R6").
+		Raw("VLD1.P 64(R5), [V1.D2, V2.D2, V3.D2, V4.D2]").
+		Raw("VLD1 (R5), [V5.D2, V6.D2, V7.D2, V8.D2]").
+		Raw("VLD1.P 64(R6), [V24.D2, V25.D2, V26.D2, V27.D2]").
+		Raw("VLD1 (R6), [V28.D2, V29.D2, V30.D2, V31.D2]").
+		Raw("VFSUB V24.D2, V1.D2, V1.D2"). // d = a-b
+		Raw("VFSUB V25.D2, V2.D2, V2.D2").
+		Raw("VFSUB V26.D2, V3.D2, V3.D2").
+		Raw("VFSUB V27.D2, V4.D2, V4.D2").
+		Raw("VFSUB V28.D2, V5.D2, V5.D2").
+		Raw("VFSUB V29.D2, V6.D2, V6.D2").
+		Raw("VFSUB V30.D2, V7.D2, V7.D2").
+		Raw("VFSUB V31.D2, V8.D2, V8.D2").
+		Raw("VFMLA V1.D2, V1.D2, V0.D2"). // acc += d*d
+		Raw("VFMLA V2.D2, V2.D2, V16.D2").
+		Raw("VFMLA V3.D2, V3.D2, V17.D2").
+		Raw("VFMLA V4.D2, V4.D2, V18.D2").
+		Raw("VFMLA V5.D2, V5.D2, V20.D2").
+		Raw("VFMLA V6.D2, V6.D2, V21.D2").
+		Raw("VFMLA V7.D2, V7.D2, V22.D2").
+		Raw("VFMLA V8.D2, V8.D2, V23.D2").
+		Raw("ADD $16, R3, R3").Raw("B uloop").
+		Label("ufold")
+	foldAccs(b, "D2")
+	b.Raw("FMOVD $(1.0), F3").Raw("VDUP V3.D[0], V3.D2"). // ones, for the 2-wide tail
+								Label("vloop").
+								Raw("ADD $2, R3, R4").Raw("CMP R1, R4").Raw("BGT vtail").
+								Raw("ADD R3<<3, R0, R5").Raw("VLD1 (R5), [V1.D2]").
+								Raw("ADD R3<<3, R2, R6").Raw("VLD1 (R6), [V2.D2]").
+								Raw("VMOV V1.B16, V7.B16").       // d = a
+								Raw("VFMLS V3.D2, V2.D2, V7.D2"). // d -= b*1  => d = a-b
+								Raw("VFMLA V7.D2, V7.D2, V0.D2"). // acc += d*d
+								Raw("ADD $2, R3, R3").Raw("B vloop").
+								Label("vtail")
 	foldD2(b)
 	b.Label("sloop").
 		Raw("CMP R1, R3").Raw("BGE done").
@@ -238,34 +311,34 @@ func ssdF64() *arm64.Builder {
 
 func dotF32() *arm64.Builder {
 	b := arm64.NewFunc("dot32NEON", dotSig(abi.Float32), 0)
-	b.LoadArg("a_base", "R0").LoadArg("a_len", "R1").LoadArg("b_base", "R2").
-		Raw("VEOR V0.B16, V0.B16, V0.B16").
-		Raw("VEOR V16.B16, V16.B16, V16.B16").
-		Raw("VEOR V17.B16, V17.B16, V17.B16").
-		Raw("VEOR V18.B16, V18.B16, V18.B16").
-		Raw("FMOVS $(1.0), F19").Raw("VDUP V19.S[0], V19.S4").
-		Raw("MOVD $0, R3").
-		Label("uloop"). // ×4 unrolled, stride 16
-		Raw("ADD $16, R3, R4").Raw("CMP R1, R4").Raw("BGT vloop").
+	b.LoadArg("a_base", "R0").LoadArg("a_len", "R1").LoadArg("b_base", "R2")
+	zeroAccs(b, 32)
+	b.Raw("MOVD $0, R3").
+		Label("uloop"). // stride 32, eight accumulators
+		Raw("ADD $32, R3, R4").Raw("CMP R1, R4").Raw("BGT ufold").
 		Raw("ADD R3<<2, R0, R5").Raw("ADD R3<<2, R2, R6").
 		Raw("VLD1.P 64(R5), [V1.S4, V2.S4, V3.S4, V4.S4]").
-		Raw("VLD1.P 64(R6), [V5.S4, V6.S4, V7.S4, V8.S4]").
-		Raw("VFMLA V5.S4, V1.S4, V0.S4").
-		Raw("VFMLA V6.S4, V2.S4, V16.S4").
-		Raw("VFMLA V7.S4, V3.S4, V17.S4").
-		Raw("VFMLA V8.S4, V4.S4, V18.S4").
-		Raw("ADD $16, R3, R3").Raw("B uloop").
-		Label("vloop").
-		Raw("VFMLA V19.S4, V16.S4, V0.S4").
-		Raw("VFMLA V19.S4, V17.S4, V0.S4").
-		Raw("VFMLA V19.S4, V18.S4, V0.S4").
-		Label("vloop2"). // 4-wide remainder
-		Raw("ADD $4, R3, R4").Raw("CMP R1, R4").Raw("BGT vtail").
-		Raw("ADD R3<<2, R0, R5").Raw("VLD1 (R5), [V1.S4]").
-		Raw("ADD R3<<2, R2, R6").Raw("VLD1 (R6), [V2.S4]").
-		Raw("VFMLA V2.S4, V1.S4, V0.S4").
-		Raw("ADD $4, R3, R3").Raw("B vloop2").
-		Label("vtail")
+		Raw("VLD1 (R5), [V5.S4, V6.S4, V7.S4, V8.S4]").
+		Raw("VLD1.P 64(R6), [V24.S4, V25.S4, V26.S4, V27.S4]").
+		Raw("VLD1 (R6), [V28.S4, V29.S4, V30.S4, V31.S4]").
+		Raw("VFMLA V24.S4, V1.S4, V0.S4").
+		Raw("VFMLA V25.S4, V2.S4, V16.S4").
+		Raw("VFMLA V26.S4, V3.S4, V17.S4").
+		Raw("VFMLA V27.S4, V4.S4, V18.S4").
+		Raw("VFMLA V28.S4, V5.S4, V20.S4").
+		Raw("VFMLA V29.S4, V6.S4, V21.S4").
+		Raw("VFMLA V30.S4, V7.S4, V22.S4").
+		Raw("VFMLA V31.S4, V8.S4, V23.S4").
+		Raw("ADD $32, R3, R3").Raw("B uloop").
+		Label("ufold")
+	foldAccs(b, "S4")
+	b.Label("vloop2"). // 4-wide remainder
+				Raw("ADD $4, R3, R4").Raw("CMP R1, R4").Raw("BGT vtail").
+				Raw("ADD R3<<2, R0, R5").Raw("VLD1 (R5), [V1.S4]").
+				Raw("ADD R3<<2, R2, R6").Raw("VLD1 (R6), [V2.S4]").
+				Raw("VFMLA V2.S4, V1.S4, V0.S4").
+				Raw("ADD $4, R3, R3").Raw("B vloop2").
+				Label("vtail")
 	foldS4(b)
 	b.Label("sloop").
 		Raw("CMP R1, R3").Raw("BGE done").
@@ -279,14 +352,29 @@ func dotF32() *arm64.Builder {
 
 func sumF32() *arm64.Builder {
 	b := arm64.NewFunc("sum32NEON", sumSig(abi.Float32), 0)
-	b.LoadArg("a_base", "R0").LoadArg("a_len", "R1").
-		Raw("VEOR V0.B16, V0.B16, V0.B16").
-		Raw("FMOVS $(1.0), F3").Raw("VDUP V3.S[0], V3.S4").
-		Raw("MOVD $0, R3").
-		Label("vloop").
+	b.LoadArg("a_base", "R0").LoadArg("a_len", "R1")
+	zeroAccs(b, 32)
+	b.Raw("MOVD $0, R3").
+		Label("uloop"). // stride 32, eight accumulators
+		Raw("ADD $32, R3, R4").Raw("CMP R1, R4").Raw("BGT ufold").
+		Raw("ADD R3<<2, R0, R5").
+		Raw("VLD1.P 64(R5), [V1.S4, V2.S4, V3.S4, V4.S4]").
+		Raw("VLD1 (R5), [V5.S4, V6.S4, V7.S4, V8.S4]").
+		Raw("VFADD V1.S4, V0.S4, V0.S4").
+		Raw("VFADD V2.S4, V16.S4, V16.S4").
+		Raw("VFADD V3.S4, V17.S4, V17.S4").
+		Raw("VFADD V4.S4, V18.S4, V18.S4").
+		Raw("VFADD V5.S4, V20.S4, V20.S4").
+		Raw("VFADD V6.S4, V21.S4, V21.S4").
+		Raw("VFADD V7.S4, V22.S4, V22.S4").
+		Raw("VFADD V8.S4, V23.S4, V23.S4").
+		Raw("ADD $32, R3, R3").Raw("B uloop").
+		Label("ufold")
+	foldAccs(b, "S4")
+	b.Label("vloop").
 		Raw("ADD $4, R3, R4").Raw("CMP R1, R4").Raw("BGT vtail").
 		Raw("ADD R3<<2, R0, R5").Raw("VLD1 (R5), [V1.S4]").
-		Raw("VFMLA V3.S4, V1.S4, V0.S4").
+		Raw("VFADD V1.S4, V0.S4, V0.S4").
 		Raw("ADD $4, R3, R3").Raw("B vloop").
 		Label("vtail")
 	foldS4(b)
@@ -301,10 +389,36 @@ func sumF32() *arm64.Builder {
 
 func ssdF32() *arm64.Builder {
 	b := arm64.NewFunc("sumSqDiff32NEON", dotSig(abi.Float32), 0)
-	b.LoadArg("a_base", "R0").LoadArg("a_len", "R1").LoadArg("b_base", "R2").
-		Raw("VEOR V0.B16, V0.B16, V0.B16").
-		Raw("MOVD $0, R3").
-		Label("vloop").
+	b.LoadArg("a_base", "R0").LoadArg("a_len", "R1").LoadArg("b_base", "R2")
+	zeroAccs(b, 32)
+	b.Raw("MOVD $0, R3").
+		Label("uloop"). // stride 32, eight accumulators
+		Raw("ADD $32, R3, R4").Raw("CMP R1, R4").Raw("BGT ufold").
+		Raw("ADD R3<<2, R0, R5").Raw("ADD R3<<2, R2, R6").
+		Raw("VLD1.P 64(R5), [V1.S4, V2.S4, V3.S4, V4.S4]").
+		Raw("VLD1 (R5), [V5.S4, V6.S4, V7.S4, V8.S4]").
+		Raw("VLD1.P 64(R6), [V24.S4, V25.S4, V26.S4, V27.S4]").
+		Raw("VLD1 (R6), [V28.S4, V29.S4, V30.S4, V31.S4]").
+		Raw("VFSUB V24.S4, V1.S4, V1.S4"). // d = a-b
+		Raw("VFSUB V25.S4, V2.S4, V2.S4").
+		Raw("VFSUB V26.S4, V3.S4, V3.S4").
+		Raw("VFSUB V27.S4, V4.S4, V4.S4").
+		Raw("VFSUB V28.S4, V5.S4, V5.S4").
+		Raw("VFSUB V29.S4, V6.S4, V6.S4").
+		Raw("VFSUB V30.S4, V7.S4, V7.S4").
+		Raw("VFSUB V31.S4, V8.S4, V8.S4").
+		Raw("VFMLA V1.S4, V1.S4, V0.S4"). // acc += d*d
+		Raw("VFMLA V2.S4, V2.S4, V16.S4").
+		Raw("VFMLA V3.S4, V3.S4, V17.S4").
+		Raw("VFMLA V4.S4, V4.S4, V18.S4").
+		Raw("VFMLA V5.S4, V5.S4, V20.S4").
+		Raw("VFMLA V6.S4, V6.S4, V21.S4").
+		Raw("VFMLA V7.S4, V7.S4, V22.S4").
+		Raw("VFMLA V8.S4, V8.S4, V23.S4").
+		Raw("ADD $32, R3, R3").Raw("B uloop").
+		Label("ufold")
+	foldAccs(b, "S4")
+	b.Label("vloop").
 		Raw("ADD $4, R3, R4").Raw("CMP R1, R4").Raw("BGT vtail").
 		Raw("ADD R3<<2, R0, R5").Raw("VLD1 (R5), [V1.S4]").
 		Raw("ADD R3<<2, R2, R6").Raw("VLD1 (R6), [V2.S4]").

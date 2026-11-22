@@ -39,12 +39,18 @@ func sumSqDiff32VX(a, b []float32) float32
 // vxMin64 is the shortest float64 reduction sent to the VX kernels: below it the
 // kernel's setup (eight zeroed accumulators, the fold) costs 1-3 ns more than
 // the plain loop (z17, linux1: Dot n=3 3.8 vs 6.4 ns, n=8 5.4 vs 8.1 ns); from
-// n=16 the kernel ties and from n=32 it wins 1.4x and more.
+// n=16 the kernel ties and from n=32 it wins 1.4x and more. Under the
+// threshold a four-accumulator Go loop (smallred.go) replaces the plain loop:
+// z17, n=8 Dot 7.5 -> 6.2 ns, n=12 11.8 -> 7.4 ns; at n=16 the kernel (10.4 ns)
+// still beats it (11.2 ns), so the threshold stays.
 const vxMin64 = 16
 
 func dot(a, b []float64) float64 {
 	if len(a) >= vxMin64 {
 		return dotVX(a, b)
+	}
+	if len(a) >= 4 {
+		return dotSmall(a, b)
 	}
 	var s float64
 	for i := range a {
@@ -57,6 +63,9 @@ func sum(a []float64) float64 {
 	if len(a) >= vxMin64 {
 		return sumVX(a)
 	}
+	if len(a) >= 4 {
+		return sumSmall(a)
+	}
 	var s float64
 	for _, v := range a {
 		s += v
@@ -67,6 +76,9 @@ func sum(a []float64) float64 {
 func sumSqDiff(a, b []float64) float64 {
 	if len(a) >= vxMin64 {
 		return sumSqDiffVX(a, b)
+	}
+	if len(a) >= 4 {
+		return sumSqDiffSmall(a, b)
 	}
 	var s float64
 	for i := range a {

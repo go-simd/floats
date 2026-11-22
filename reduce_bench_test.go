@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func redBenchSizes() []int { return []int{3, 8, 16, 32, 64, 256, 1000, 4096, 100000, 1000000} }
+func redBenchSizes() []int { return []int{3, 8, 12, 16, 24, 32, 64, 256, 1000, 4096, 100000, 1000000} }
 
 func BenchmarkReduce(b *testing.B) {
 	rng := rand.New(rand.NewSource(7))
