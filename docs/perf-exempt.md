@@ -12,6 +12,11 @@ its reason (`cd bench/perf && go test -run TestPerf .` checks it).
 - `RoundEven`: NumPy timing deferred (`np.rint`), as `Abs`.
 - `Maximum`: NumPy timing deferred (`np.maximum`). Timed against the scalar Go loop on one Zen 3 core, README. A valid refbench run needs a 1-minute load below 8.
 - `Minimum`: NumPy timing deferred (`np.minimum`), as `Maximum`.
+- `Add32`: NumPy timing deferred (`np.add` on float32). Timed against the scalar Go loop by `go test -bench Binop32`. A valid refbench run needs a 1-minute load below 8; it was 36 to 45 when this was added.
+- `Sub32`: NumPy timing deferred (`np.subtract`), as `Add32`.
+- `Mul32`: NumPy timing deferred (`np.multiply`), as `Add32`.
+- `Div32`: NumPy timing deferred (`np.divide`), as `Add32`.
+- `Sqrt32`: NumPy timing deferred (`np.sqrt`), as `Add32`.
 - `MirrorCombine`: no NumPy equivalent (a fused pair pass of a real transform); timed in the DCT-II/III of go-fft/fft#162 against FFTW, not against NumPy.
 - `CMulZipRev`: no NumPy equivalent (a reversed gather fused with a complex multiply); timed in the DCT-III of go-fft/fft#162 against FFTW, not against NumPy.
 - `MirrorCombineSplit`: no NumPy equivalent, as `MirrorCombine`.

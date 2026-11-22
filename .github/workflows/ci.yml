@@ -22,6 +22,19 @@ jobs:
           done
           GOFLAGS=-mod=mod go run -modfile="$RUNNER_TEMP/gen.mod" allpass_arm64_gen.go
           git diff --exit-code -- allpass_arm64.s || { echo "::error::allpass_arm64.s is stale or hand-edited; run allpass_arm64_gen.go and commit"; exit 1; }
+  generated-binop32:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with: { go-version: '1.27.3' }
+      - name: regenerate binop32_amd64.s and binop32_arm64.s
+        run: |
+          printf 'module gen\n\ngo 1.27.1\n\nrequire github.com/go-asmgen/asmgen v0.23.0\n' > "$RUNNER_TEMP/gen.mod"
+          for g in amd64 arm64; do
+            GOFLAGS=-mod=mod go run -modfile="$RUNNER_TEMP/gen.mod" binop32_${g}_gen.go
+            git diff --exit-code -- binop32_${g}.s || { echo "::error::binop32_${g}.s is stale or hand-edited; run binop32_${g}_gen.go and commit"; exit 1; }
+          done
   native:
     strategy:
       fail-fast: false
