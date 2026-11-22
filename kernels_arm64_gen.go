@@ -355,31 +355,34 @@ func axpyF64() *arm64.Builder {
 	b := arm64.NewFunc("axpyNEON", axpySig("alpha"), 0)
 	loadScalar(b, "alpha")
 	b.LoadArg("x_base", "R0").LoadArg("x_len", "R1").LoadArg("y_base", "R2").
-		Raw("MOVD $0, R3").
+		// R0 walks x, R2 walks y (loads), R3 walks y (stores); R1 counts the
+		// elements left. Post-incremented VLD1.P/VST1.P keep the address
+		// arithmetic out of the loop (the previous index form recomputed two
+		// addresses per iteration and was ~30% slower than the kernel it
+		// replaced on Apple M cores).
+		Raw("MOVD R2, R3").
 		Label("uloop").
-		Raw("ADD $8, R3, R4").Raw("CMP R1, R4").Raw("BGT vloop").
-		Raw("ADD R3<<3, R0, R5").Raw("ADD R3<<3, R2, R6").
-		Raw("VLD1 (R5), " + xs).
-		Raw("VLD1 (R6), " + ys)
+		Raw("CMP $8, R1").Raw("BLT vloop").
+		Raw("VLD1.P 64(R0), " + xs).
+		Raw("VLD1.P 64(R2), " + ys)
 	for k := 0; k < 4; k++ {
 		b.Raw(fmt.Sprintf("VFMLA V31.D2, V%d.D2, V%d.D2", 1+k, 5+k)) // y += x*alpha
 	}
-	b.Raw("VST1 " + ys + ", (R6)").
-		Raw("ADD $8, R3, R3").Raw("B uloop").
+	b.Raw("VST1.P " + ys + ", 64(R3)").
+		Raw("SUB $8, R1, R1").Raw("B uloop").
 		Label("vloop").
-		Raw("ADD $2, R3, R4").Raw("CMP R1, R4").Raw("BGT sloop").
-		Raw("ADD R3<<3, R0, R5").Raw("VLD1 (R5), [V1.D2]").
-		Raw("ADD R3<<3, R2, R6").Raw("VLD1 (R6), [V5.D2]").
+		Raw("CMP $2, R1").Raw("BLT sloop").
+		Raw("VLD1.P 16(R0), [V1.D2]").
+		Raw("VLD1.P 16(R2), [V5.D2]").
 		Raw("VFMLA V31.D2, V1.D2, V5.D2").
-		Raw("VST1 [V5.D2], (R6)").
-		Raw("ADD $2, R3, R3").Raw("B vloop").
+		Raw("VST1.P [V5.D2], 16(R3)").
+		Raw("SUB $2, R1, R1").Raw("B vloop").
 		Label("sloop").
-		Raw("CMP R1, R3").Raw("BGE done").
-		Raw("FMOVD (R0)(R3<<3), F1").
-		Raw("FMOVD (R2)(R3<<3), F2").
+		Raw("CBZ R1, done").
+		Raw("FMOVD (R0), F1").
+		Raw("FMOVD (R2), F2").
 		Raw("FMADDD F31, F2, F1, F2"). // F2 = x*alpha + y
-		Raw("FMOVD F2, (R2)(R3<<3)").
-		Raw("ADD $1, R3, R3").Raw("B sloop").
+		Raw("FMOVD F2, (R3)").
 		Label("done").Ret()
 	return b
 }

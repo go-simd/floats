@@ -194,6 +194,39 @@ TEXT ·axpyAVX2(SB), NOSPLIT, $0-56
 	MOVQ x_base+8(FP), SI
 	MOVQ x_len+16(FP), CX
 	MOVQ y_base+32(FP), DI
+	CMPQ CX, $16
+	JGE big
+	VMOVDDUP X0, X2
+	XORQ AX, AX
+qloop:
+	LEAQ 4(AX), R8
+	CMPQ R8, CX
+	JGT dstep
+	VMOVUPD (DI)(AX*8), X3
+	VMOVUPD 16(DI)(AX*8), X4
+	VFMADD231PD (SI)(AX*8), X2, X3
+	VFMADD231PD 16(SI)(AX*8), X2, X4
+	VMOVUPD X3, (DI)(AX*8)
+	VMOVUPD X4, 16(DI)(AX*8)
+	ADDQ $4, AX
+	JMP qloop
+dstep:
+	LEAQ 2(AX), R8
+	CMPQ R8, CX
+	JGT stail
+	VMOVUPD (DI)(AX*8), X3
+	VFMADD231PD (SI)(AX*8), X2, X3
+	VMOVUPD X3, (DI)(AX*8)
+	ADDQ $2, AX
+stail:
+	CMPQ AX, CX
+	JGE sdone
+	VMOVSD (DI)(AX*8), X1
+	VFMADD231SD (SI)(AX*8), X0, X1
+	VMOVSD X1, (DI)(AX*8)
+sdone:
+	RET
+big:
 	VBROADCASTSD X0, Y0
 	XORQ AX, AX
 uloop:

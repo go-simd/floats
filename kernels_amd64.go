@@ -109,6 +109,8 @@ func sumSqDiff32(a, b []float32) float32 {
 }
 
 func axpy(alpha float64, x, y []float64) {
+	// axpyAVX2 itself takes an XMM-only path below 16 elements (no YMM
+	// broadcast, no VZEROUPPER), which is faster there than the 4-wide loop.
 	if hasAVX2FMA {
 		axpyAVX2(alpha, x, y)
 		return
