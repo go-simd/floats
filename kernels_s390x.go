@@ -6,22 +6,17 @@ package floats
 // go-asmgen (kernels_s390x_gen.go) into kernels_s390x.s. The vector facility is
 // the z13 baseline, so these are used unconditionally.
 //
-// float32 is not vectorised here — the released assembler lacks the single-
-// element (.SB) vector-FP mnemonics — so the float32 reductions use the
-// lane-blocked scalar reference, which the compiler pipelines well.
-//
-// float64 Dot has NO VX kernel here, deliberately. On real z15 silicon
-// (linux1, go1.26.4, 2026-07-03) the VFMADB dot-product kernel is SLOWER than
-// the plain Go loop the gc compiler already autovectorizes — measured Dot
-// throughput VX vs naive 11.6 GB/s vs 20.6 GB/s = 0.56×. Per the dispatch
-// principle (never run a SIMD kernel where it loses to the scalar/autovectorized
-// path) Dot routes to the naive autovectorizable loop below, so no dot kernel is
-// generated. Sum and SumSqDiff KEEP their VX kernels: they were not measured as
-// losses on z15, and Distance/CosineSimilarity build on them.
-//
-// We deliberately do NOT use the lane-blocked reference (reference.go) for the
-// s390x Dot: its multi-lane fold defeats the gc autovectorizer, so the plain
-// left-to-right loop is the faster scalar form (same rationale as ppc64le).
+// All six kernels (Dot, Sum, SumSqDiff in float64 and float32) keep EIGHT
+// independent accumulators. The earlier single-accumulator VFMADB Dot lost to
+// the plain Go loop on z15 (0.56×) and the single-accumulator Sum ran one
+// latency-bound chain; with eight chains, measured on z17 (linux1, one core,
+// steal 0), old -> new: f64 Dot n=1000 386 -> 191 ns (2.0×), Sum 624 -> 106 ns
+// (5.9×), Distance 644 -> 204 ns (3.2×); float32 Dot 2849 -> 105 ns (27×), Sum
+// 2898 -> 61 ns (47×), because float32 used the lane-blocked scalar reference
+// before. The float32 kernels need the vector-enhancements facility 1 (z14: the
+// .SB ops are emitted as encoded words, see the generator) and are gated on
+// hasVXE; the lane-blocked reference is the fallback. Below vxMin64 float64
+// uses the plain loops.
 //
 //go:noescape
 func sumVX(a []float64) float64
@@ -29,7 +24,28 @@ func sumVX(a []float64) float64
 //go:noescape
 func sumSqDiffVX(a, b []float64) float64
 
+//go:noescape
+func dotVX(a, b []float64) float64
+
+//go:noescape
+func dot32VX(a, b []float32) float32
+
+//go:noescape
+func sum32VX(a []float32) float32
+
+//go:noescape
+func sumSqDiff32VX(a, b []float32) float32
+
+// vxMin64 is the shortest float64 reduction sent to the VX kernels: below it the
+// kernel's setup (eight zeroed accumulators, the fold) costs 1-3 ns more than
+// the plain loop (z17, linux1: Dot n=3 3.8 vs 6.4 ns, n=8 5.4 vs 8.1 ns); from
+// n=16 the kernel ties and from n=32 it wins 1.4x and more.
+const vxMin64 = 16
+
 func dot(a, b []float64) float64 {
+	if len(a) >= vxMin64 {
+		return dotVX(a, b)
+	}
 	var s float64
 	for i := range a {
 		s += a[i] * b[i]
@@ -37,9 +53,46 @@ func dot(a, b []float64) float64 {
 	return s
 }
 
-func sum(a []float64) float64          { return sumVX(a) }
-func sumSqDiff(a, b []float64) float64 { return sumSqDiffVX(a, b) }
+func sum(a []float64) float64 {
+	if len(a) >= vxMin64 {
+		return sumVX(a)
+	}
+	var s float64
+	for _, v := range a {
+		s += v
+	}
+	return s
+}
 
-func dot32(a, b []float32) float32       { return dotLanes32(a, b) }
-func sum32(a []float32) float32          { return sumLanes32(a) }
-func sumSqDiff32(a, b []float32) float32 { return sumSqDiffLanes32(a, b) }
+func sumSqDiff(a, b []float64) float64 {
+	if len(a) >= vxMin64 {
+		return sumSqDiffVX(a, b)
+	}
+	var s float64
+	for i := range a {
+		d := a[i] - b[i]
+		s += d * d
+	}
+	return s
+}
+
+func dot32(a, b []float32) float32 {
+	if hasVXE {
+		return dot32VX(a, b)
+	}
+	return dotLanes32(a, b)
+}
+
+func sum32(a []float32) float32 {
+	if hasVXE {
+		return sum32VX(a)
+	}
+	return sumLanes32(a)
+}
+
+func sumSqDiff32(a, b []float32) float32 {
+	if hasVXE {
+		return sumSqDiff32VX(a, b)
+	}
+	return sumSqDiffLanes32(a, b)
+}

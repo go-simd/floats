@@ -1,45 +1,39 @@
 //go:build ignore
 
 // Command gen produces kernels_s390x.s with go-asmgen: z/Architecture
-// vector-facility FMA reduction kernels for the float64 sum and
-// sum-of-squared-differences.
+// vector-facility reduction kernels for the dot product, sum and
+// sum-of-squared-differences, in float64 (dotVX, sumVX, sumSqDiffVX) and
+// float32 (dot32VX, sum32VX, sumSqDiff32VX).
 //
-// Float64 Dot has NO VX kernel here, deliberately. On real z15 silicon (linux1,
-// go1.26.4, 2026-07-03) the VFMADB dot kernel is SLOWER than the plain Go loop
-// the gc compiler already autovectorizes — measured Dot throughput VX vs naive
-// 11.6 GB/s vs 20.6 GB/s = 0.56×. Per the dispatch principle (never run a SIMD
-// kernel where it loses to the scalar/autovectorized path) the s390x Dot routes
-// to the naive autovectorizable loop instead (see kernels_s390x.go), so no dot
-// kernel is generated. Sum and SumSqDiff KEEP their VX kernels.
+// Eight independent accumulators (V0..V7). A vector FMA or add has a latency
+// of several cycles, so the earlier single-accumulator kernels (one V0, stride
+// 2) ran at one chain per latency: measured on z17 (linux1, steal 0), the f64
+// Sum kernel at 0.62 ns/element against 0.36 ns/element for the plain Go Dot
+// loop. The bulk loop processes eight registers per iteration (16 f64 or 32
+// f32 elements), folds the accumulators with a balanced add tree into V0, then
+// a one-register loop and a scalar loop take the rest. The summation order is
+// unspecified: the contract is the error bound gamma_n * sum|terms|
+// (reduce_bound_test.go).
 //
-// Only float64 is vectorised: the released assembler exposes the double-element
-// vector-FP ops (VFMADB multiply-add, VFADB add, VFSDB subtract, VFMDB
-// multiply) but not their single-element ".SB" counterparts, so the float32
-// reductions stay on the lane-blocked scalar reference (see kernels_s390x.go).
+// The float32 kernels use the single-precision vector-FP ops of the
+// vector-enhancements facility 1 (z14): VFASB, VFSSB and VFMASB. The released
+// assembler has no mnemonics for them, so they are emitted as their fixed
+// encodings through WORD/BYTE (e7 | V1 V2 | V3 .. | .. M | .. | opcode), the
+// same way binop32_s390x.s does; the encoder is checked against the bytes the
+// assembler produced for VFMADB (e7033300008f). The Go side gates the float32
+// kernels on hasVXE and falls back to the lane-blocked scalar reference.
 //
-// Each kernel folds the bulk into a V0 accumulator (2×f64 lanes) at stride 2,
-// then horizontally reduces by extracting both lanes to GPRs (VLGVG), moving
-// them to FPRs (LDGR) and adding (FADD); a scalar tail finishes the odd element
-// with FMADD/FADD.
-//
-// Big-endian note: s390x is big-endian, but every operation here is an
-// element-wise FP reduction (per-lane FMA followed by a commutative horizontal
-// sum of the two lanes), so the lane numbering does not affect the result —
-// VLGVG $0 and $1 pull both lanes and they are added together regardless of
-// which holds which input. The differential tests and fuzzers under qemu-s390x
-// (a big-endian target) are the proof.
-//
-// The vector facility is the z13 baseline, so no runtime feature gate is needed.
+// Big-endian note: every operation is an element-wise reduction ending in a
+// commutative horizontal sum, so lane numbering does not change the result.
 //
 // Operand orders (verified against the released assembler + qemu):
 //
 //	VFMADB Va, Vb, Vc, Vd   Vd = Va*Vb + Vc
-//	VFMDB  Va, Vb, Vd       Vd = Va*Vb
 //	VFSDB  Va, Vb, Vd       Vd = Vb - Va
 //	FADD   Fs, Fd           Fd = Fd + Fs
 //	FMADD  Fa, Fb, Fd       Fd = Fd + Fa*Fb
 //
-// Run: go run kernels_s390x_gen.go
+// Run: go run -modfile=<modfile requiring github.com/go-asmgen/asmgen v0.23.2> kernels_s390x_gen.go
 package main
 
 import (
@@ -51,24 +45,24 @@ import (
 	"github.com/go-asmgen/asmgen/s390x"
 )
 
-func dotSig() abi.Signature {
-	return abi.LayoutArgs(
-		[]abi.Arg{abi.Slice("a"), abi.Slice("b")},
-		[]abi.Arg{abi.Scalar("ret", abi.Float64)},
-	)
-}
+const redK = 8
 
-func sumSig() abi.Signature {
-	return abi.LayoutArgs(
-		[]abi.Arg{abi.Slice("a")},
-		[]abi.Arg{abi.Scalar("ret", abi.Float64)},
-	)
-}
+type kind int
+
+const (
+	kDot kind = iota
+	kSum
+	kSSD
+)
 
 func main() {
 	f := emit.NewFile("s390x")
-	f.Add(sumF64().Func())
-	f.Add(ssdF64().Func())
+	for _, k := range []kind{kDot, kSum, kSSD} {
+		f.Add(kernel(k, false).Func())
+	}
+	for _, k := range []kind{kDot, kSum, kSSD} {
+		f.Add(kernel(k, true).Func())
+	}
 	if err := os.WriteFile("kernels_s390x.s", []byte(f.String()), 0o644); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -76,64 +70,138 @@ func main() {
 	fmt.Println("wrote kernels_s390x.s")
 }
 
-// foldV0 reduces V0 (2×f64) to F0 = lane0 + lane1.
-func foldV0(b *s390x.Builder) {
-	b.Raw("VLGVG $0, V0, R7").
-		Raw("VLGVG $1, V0, R8").
-		Raw("LDGR R7, F0").
-		Raw("LDGR R8, F1").
-		Raw("FADD F1, F0") // F0 += F1
+// vrrc encodes a word-element (M4=2) VRR-c vector-FP op: V1 = V2 op V3.
+func vrrc(op, v1, v2, v3 int) string {
+	return fmt.Sprintf("WORD $0xe7%02x%02x00; BYTE $0x20; BYTE $0x%02x", v1<<4|v2, v3<<4, op)
 }
 
-// Register plan: R1 a_base, R2 a_len, R3 b_base (LoadArg); R4 i; R5/R6 addr;
-// V0 accumulator; V1/V2 chunks; V3 diff.
-
-func sumF64() *s390x.Builder {
-	b := s390x.NewFunc("sumVX", sumSig(), 0)
-	b.LoadArg("a_base", "R1").LoadArg("a_len", "R2").
-		Raw("VZERO V0").
-		Raw("MOVD $0, R4").
-		Label("vloop").
-		Raw("ADD $2, R4, R5").Raw("CMPBGT R5, R2, vtail").
-		Raw("SLD $3, R4, R6").
-		Raw("VL (R1)(R6*1), V1").
-		Raw("VFADB V1, V0, V0"). // V0 += a
-		Raw("ADD $2, R4, R4").Raw("BR vloop").
-		Label("vtail")
-	foldV0(b)
-	b.Label("sloop").
-		Raw("CMPBGE R4, R2, done").
-		Raw("SLD $3, R4, R6").
-		Raw("FMOVD (R1)(R6*1), F1").
-		Raw("FADD F1, F0").
-		Raw("ADD $1, R4, R4").Raw("BR sloop").
-		Label("done").StoreRet("F0", "ret").Ret()
-	return b
+// vfmasb encodes VFMA with word elements: V1 = V2*V3 + V4.
+func vfmasb(v1, v2, v3, v4 int) string {
+	return fmt.Sprintf("WORD $0xe7%02x%02x00; BYTE $0x%02x; BYTE $0x8f", v1<<4|v2, v3<<4|2, v4<<4)
 }
 
-func ssdF64() *s390x.Builder {
-	b := s390x.NewFunc("sumSqDiffVX", dotSig(), 0)
-	b.LoadArg("a_base", "R1").LoadArg("a_len", "R2").LoadArg("b_base", "R3").
-		Raw("VZERO V0").
-		Raw("MOVD $0, R4").
+func kernel(k kind, f32 bool) *s390x.Builder {
+	name := map[kind]string{kDot: "dot", kSum: "sum", kSSD: "sumSqDiff"}[k]
+	lanes, esz := 2, 8
+	ldF, scalarAdd, scalarFMA, scalarSub := "FMOVD", "FADD", "FMADD", "FSUB"
+	rt := abi.Float64
+	suffix := ""
+	if f32 {
+		lanes, esz = 4, 4
+		ldF, scalarAdd, scalarFMA, scalarSub = "FMOVS", "FADDS", "FMADDS", "FSUBS"
+		rt = abi.Float32
+		suffix = "32"
+	}
+	blk := redK * lanes
+	two := k != kSum
+	args := []abi.Arg{abi.Slice("a")}
+	if two {
+		args = append(args, abi.Slice("b"))
+	}
+	sig := abi.LayoutArgs(args, []abi.Arg{abi.Scalar("ret", rt)})
+	b := s390x.NewFunc(name+suffix+"VX", sig, 0)
+	b.LoadArg("a_base", "R1").LoadArg("a_len", "R2")
+	if two {
+		b.LoadArg("b_base", "R3")
+	}
+
+	vadd := func(d, x, y int) { // Vd = Vx + Vy
+		if f32 {
+			b.Raw("%s", vrrc(0xe3, d, x, y))
+		} else {
+			b.Raw("VFADB V%d, V%d, V%d", y, x, d)
+		}
+	}
+	// op accumulates the registers loaded into ta/tb into accumulator ac.
+	op := func(ac, ta, tb int) {
+		switch k {
+		case kDot:
+			if f32 {
+				b.Raw("%s", vfmasb(ac, ta, tb, ac))
+			} else {
+				b.Raw("VFMADB V%d, V%d, V%d, V%d", ta, tb, ac, ac)
+			}
+		case kSum:
+			vadd(ac, ac, ta)
+		case kSSD:
+			if f32 {
+				b.Raw("%s", vrrc(0xe2, ta, ta, tb)) // ta = ta - tb
+				b.Raw("%s", vfmasb(ac, ta, ta, ac))
+			} else {
+				b.Raw("VFSDB V%d, V%d, V%d", tb, ta, ta) // ta = ta - tb
+				b.Raw("VFMADB V%d, V%d, V%d, V%d", ta, ta, ac, ac)
+			}
+		}
+	}
+	load := func(off, ta, tb int) {
+		b.Raw("VL %d(R1), V%d", off, ta)
+		if two {
+			b.Raw("VL %d(R3), V%d", off, tb)
+		}
+	}
+
+	b.Raw("MOVD R2, R4")
+	for r := 0; r < redK; r++ {
+		b.Raw("VZERO V%d", r)
+	}
+	b.Raw("MOVD $%d, R9", blk).Raw("CMPBLT R4, R9, rtail").
+		Label("cloop")
+	for kk := 0; kk < redK; kk++ {
+		ta, tb := 8+2*(kk&1), 9+2*(kk&1)
+		load(16*kk, ta, tb)
+		op(kk, ta, tb)
+	}
+	b.Raw("ADD $128, R1")
+	if two {
+		b.Raw("ADD $128, R3")
+	}
+	b.Raw("ADD $%d, R4", -blk).Raw("CMPBGE R4, R9, cloop").
+		Label("rtail")
+	for _, p := range [][2]int{{0, 1}, {2, 3}, {4, 5}, {6, 7}, {0, 2}, {4, 6}, {0, 4}} {
+		vadd(p[0], p[0], p[1])
+	}
+	b.Raw("MOVD $%d, R9", lanes).
 		Label("vloop").
-		Raw("ADD $2, R4, R5").Raw("CMPBGT R5, R2, vtail").
-		Raw("SLD $3, R4, R6").
-		Raw("VL (R1)(R6*1), V1").
-		Raw("VL (R3)(R6*1), V2").
-		Raw("VFSDB V2, V1, V3").      // V3 = a - b
-		Raw("VFMADB V3, V3, V0, V0"). // V0 += d*d
-		Raw("ADD $2, R4, R4").Raw("BR vloop").
+		Raw("CMPBLT R4, R9, vtail")
+	load(0, 8, 9)
+	op(0, 8, 9)
+	b.Raw("ADD $16, R1")
+	if two {
+		b.Raw("ADD $16, R3")
+	}
+	b.Raw("ADD $%d, R4", -lanes).Raw("BR vloop").
 		Label("vtail")
-	foldV0(b)
+	if f32 {
+		// Extract every lane before the first LDGR: F0..F3 alias the high
+		// doublewords of V0..V3, so LDGR F0 would clobber lanes 0-1 of V0.
+		gpr := []string{"R7", "R8", "R10", "R11"}
+		for l := 0; l < lanes; l++ {
+			b.Raw("VLGVF $%d, V0, %s", l, gpr[l]).Raw("SLD $32, %s, %s", gpr[l], gpr[l])
+		}
+		for l := 0; l < lanes; l++ {
+			b.Raw("LDGR %s, F%d", gpr[l], l)
+		}
+		b.Raw("%s F1, F0", scalarAdd).Raw("%s F3, F2", scalarAdd).Raw("%s F2, F0", scalarAdd)
+	} else {
+		b.Raw("VLGVG $0, V0, R7").Raw("VLGVG $1, V0, R8").
+			Raw("LDGR R7, F0").Raw("LDGR R8, F1").Raw("FADD F1, F0")
+	}
 	b.Label("sloop").
-		Raw("CMPBGE R4, R2, done").
-		Raw("SLD $3, R4, R6").
-		Raw("FMOVD (R1)(R6*1), F1").
-		Raw("FMOVD (R3)(R6*1), F2").
-		Raw("FSUB F2, F1"). // F1 = F1 - F2 = a-b
-		Raw("FMADD F1, F1, F0").
-		Raw("ADD $1, R4, R4").Raw("BR sloop").
+		Raw("CMPBEQ R4, $0, done").
+		Raw("%s 0(R1), F1", ldF)
+	switch k {
+	case kDot:
+		b.Raw("%s 0(R3), F2", ldF).Raw("%s F1, F2, F0", scalarFMA)
+	case kSum:
+		b.Raw("%s F1, F0", scalarAdd)
+	case kSSD:
+		b.Raw("%s 0(R3), F2", ldF).Raw("%s F2, F1", scalarSub).Raw("%s F1, F1, F0", scalarFMA)
+	}
+	b.Raw("ADD $%d, R1", esz)
+	if two {
+		b.Raw("ADD $%d, R3", esz)
+	}
+	b.Raw("ADD $-1, R4").Raw("BR sloop").
 		Label("done").StoreRet("F0", "ret").Ret()
 	return b
 }
