@@ -2,6 +2,9 @@
 
 package floats
 
+// sqrt32Step 1: every one of the 2^32 patterns.
+const sqrt32Step = 1
+
 // runExhaustiveKernels runs the exhaustive check down the SSE2 kernel and, when
 // the CPU has AVX2+FMA, the AVX2 one.
 func runExhaustiveKernels(run func(label string)) {
