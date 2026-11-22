@@ -39,8 +39,20 @@ func div32SSE2(dst, a, b []float32)
 //go:noescape
 func sqrt32SSE2(dst, src []float32)
 
+// binop32SSEFrom is the length from which Add32, Sub32 and Mul32 use the SSE2
+// kernel even when AVX2 is available. Past the L2 cache (three float32 streams of
+// 65536 elements are 768 KiB) these loops are bound by memory, not by the vector
+// unit, and on Zen 3 the 128-bit loop moves the data 7-10 % faster than the
+// 256-bit one (EPYC 7773X, BenchmarkBinop32Variants: Add32 n=65536 9.7 us vs
+// 10.5 us, n=1e6 165 us vs 181 us; below 32768 the AVX2 kernel is as fast or up
+// to 2.3x faster). Neither a different unroll depth nor a 32-byte aligned
+// destination closed the gap. Div32 is bound by the divider, where the AVX2
+// kernel wins at every length, so it has no threshold. Results are bit-identical
+// either way (one IEEE operation per lane).
+const binop32SSEFrom = 1 << 16
+
 func add32(dst, a, b []float32) {
-	if hasAVX2FMA {
+	if hasAVX2FMA && len(dst) < binop32SSEFrom {
 		add32AVX2(dst, a, b)
 		return
 	}
@@ -48,7 +60,7 @@ func add32(dst, a, b []float32) {
 }
 
 func sub32(dst, a, b []float32) {
-	if hasAVX2FMA {
+	if hasAVX2FMA && len(dst) < binop32SSEFrom {
 		sub32AVX2(dst, a, b)
 		return
 	}
@@ -56,7 +68,7 @@ func sub32(dst, a, b []float32) {
 }
 
 func mul32(dst, a, b []float32) {
-	if hasAVX2FMA {
+	if hasAVX2FMA && len(dst) < binop32SSEFrom {
 		mul32AVX2(dst, a, b)
 		return
 	}

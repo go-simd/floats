@@ -37,13 +37,35 @@ func kernel() *amd64.Builder {
 	for k := 0; k < 4; k++ {
 		b.Raw("VXORPD Y%d, Y%d, Y%d", k, k, k)
 	}
-	b.Raw("TESTQ R9, R9").Raw("JZ done").Label("loop").
-		Raw("VMOVUPD (SI), Y4").Raw("VMOVUPD 32(SI), Y5").
-		Raw("VMOVUPD (DX), Y6").Raw("VMOVUPD 32(DX), Y7").
-		Raw("VPERMILPD $5, Y6, Y8").Raw("VPERMILPD $5, Y7, Y9").
-		Raw("VFMADD231PD Y6, Y4, Y0").Raw("VFMADD231PD Y7, Y5, Y1").
-		Raw("VFMADD231PD Y8, Y4, Y2").Raw("VFMADD231PD Y9, Y5, Y3").
-		Raw("ADDQ $64, SI").Raw("ADDQ $64, DX").Raw("DECQ R9").Raw("JNZ loop").
+	// block emits one four-complex step with accumulators acc[0..3], reading at
+	// byte offset off.
+	block := func(off int, acc [4]string) {
+		b.Raw("VMOVUPD %d(SI), Y4", off).Raw("VMOVUPD %d(SI), Y5", off+32).
+			Raw("VMOVUPD %d(DX), Y6", off).Raw("VMOVUPD %d(DX), Y7", off+32).
+			Raw("VPERMILPD $5, Y6, Y8").Raw("VPERMILPD $5, Y7, Y9").
+			Raw("VFMADD231PD Y6, Y4, %s", acc[0]).Raw("VFMADD231PD Y7, Y5, %s", acc[1]).
+			Raw("VFMADD231PD Y8, Y4, %s", acc[2]).Raw("VFMADD231PD Y9, Y5, %s", acc[3])
+	}
+	// Each accumulator is a loop-carried FMA chain (latency 4, two FMA ports),
+	// so one block per pass keeps only four chains in flight: two blocks per
+	// pass run eight (Y0..Y3 and Y10..Y13), summed after the loop. The summation
+	// order is therefore not the left-to-right one (bound: gamma_n sum|a_i b_i|).
+	b.Raw("TESTQ R9, R9").Raw("JZ done").
+		Raw("CMPQ R9, $2").Raw("JLT loop")
+	for k := 10; k < 14; k++ {
+		b.Raw("VXORPD Y%d, Y%d, Y%d", k, k, k)
+	}
+	b.Label("loop2")
+	block(0, [4]string{"Y0", "Y1", "Y2", "Y3"})
+	block(64, [4]string{"Y10", "Y11", "Y12", "Y13"})
+	b.Raw("ADDQ $128, SI").Raw("ADDQ $128, DX").Raw("SUBQ $2, R9").
+		Raw("CMPQ R9, $2").Raw("JGE loop2").
+		Raw("VADDPD Y10, Y0, Y0").Raw("VADDPD Y11, Y1, Y1").
+		Raw("VADDPD Y12, Y2, Y2").Raw("VADDPD Y13, Y3, Y3").
+		Raw("TESTQ R9, R9").Raw("JZ done").
+		Label("loop")
+	block(0, [4]string{"Y0", "Y1", "Y2", "Y3"})
+	b.Raw("ADDQ $64, SI").Raw("ADDQ $64, DX").Raw("DECQ R9").Raw("JNZ loop").
 		Label("done").
 		Raw("VADDPD Y1, Y0, Y0").Raw("VADDPD Y3, Y2, Y2").
 		Raw("VMOVUPD Y0, (R8)").Raw("VMOVUPD Y2, 32(R8)").
