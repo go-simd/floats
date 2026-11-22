@@ -165,26 +165,34 @@ func kernel() *ppc64.Builder {
 	m := ptrs{"R3", "R4", "R5"}
 	const setA, setB = 32, 48
 	adv := func() {
-		b.Raw("ADD $64, R3").Raw("ADD $64, R4").Raw("ADD $64, R5").Raw("ADD $-4, R6")
+		b.Raw("ADD $64, R3").Raw("ADD $64, R4").Raw("ADD $64, R5")
 	}
-	b.Raw("SUB R7, R6, R6")
-	b.Raw("CMP R6, $4").Raw("BLT done")
+	// R21 = blocks of four. The loop runs on CTR (bdnz resolves early, with no direction
+	// prediction: a compare-and-branch exit mispredicted once per call from 96 numbers on,
+	// measured with perf), (R21-1)/2 times, two blocks per pass, each pass loading the two
+	// blocks after the one it computes; what is left (one block, or two) follows it.
+	b.Raw("SUB R7, R6, R6").Raw("SRD $2, R6, R21")
+	b.Raw("CMP R21, $1").Raw("BLT done")
 	quadLoad(b, m, 0, setA)
+	b.Raw("ADD $-1, R21, R22").Raw("SRD $1, R22, R22").Raw("CMP R22, $0").Raw("BEQ rest")
+	b.Raw("MOVD R22, CTR")
 	b.Label("loop")
-	b.Raw("CMP R6, $8").Raw("BLT lastA")
 	quadLoad(b, m, 64, setB)
 	quadCompute(b, m, 0, setA)
 	adv()
-	b.Raw("CMP R6, $8").Raw("BLT lastB")
 	quadLoad(b, m, 64, setA)
 	quadCompute(b, m, 0, setB)
 	adv()
-	b.Raw("BR loop")
+	b.Raw("BDNZ loop")
+	b.Label("rest")
+	b.Raw("ANDCC $1, R21, R23").Raw("BNE lastA")
+	quadLoad(b, m, 64, setB)
+	quadCompute(b, m, 0, setA)
+	adv()
+	quadCompute(b, m, 0, setB)
+	b.Raw("BR done")
 	b.Label("lastA")
 	quadCompute(b, m, 0, setA)
-	b.Raw("BR done")
-	b.Label("lastB")
-	quadCompute(b, m, 0, setB)
 	b.Label("done").Ret()
 	return b
 }

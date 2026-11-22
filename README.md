@@ -377,11 +377,13 @@ two and one itself, in one call; the arm64 kernel is the scalar loop in assembly
 `FMSUBD`, paired loads and stores, no bounds checks), not NEON, which lost to Go's loop below
 64 numbers on Neoverse; the s390x kernel (vector facility, z13 and later) holds one complex
 number per register, four per step (`VFMDB`, `VFMADB` on the swapped parts, a sign vector
-for the real part), from 20 numbers; the ppc64le kernel (VSX, POWER8 and later, from 40
+for the real part), from 20 numbers; the ppc64le kernel (VSX, POWER8 and later, from 35
 numbers) splits two numbers into real and imaginary vectors (`XXPERMDI`, `XVMULDP`,
 `XVMSUBADP`, `XVMADDADP`, then `XXPERMDI` back), four per step with the next step's loads
 issued before the current step's arithmetic, and the last `n mod 4` numbers done first so
-that their latency hides behind the loop; the one-number-per-register form lost to Go's
+that their latency hides behind the loop, which counts on `CTR` (a compare-and-branch exit
+was mispredicted once per call from 96 numbers on, 3 to 8 % slower than Go's loop there);
+the one-number-per-register form lost to Go's
 loop by 11 to 30 % on POWER9, and the unpipelined pair form by 1 to 4 % above 64 numbers
 (Go's loop there has its bounds checks eliminated); other CPUs run
 Go's complex product.

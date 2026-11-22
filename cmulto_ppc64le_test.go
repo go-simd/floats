@@ -11,7 +11,7 @@ import (
 // nothing written past n.
 func TestCMulToKernelRuns(t *testing.T) {
 	rng := rand.New(rand.NewSource(8))
-	for n := 1; n <= 21; n++ {
+	for n := 1; n <= 200; n++ {
 		a, b := cmulRand(rng, n+2, 3), cmulRand(rng, n+2, 3)
 		d := make([]complex128, n+2)
 		for i := range d {
@@ -24,6 +24,15 @@ func TestCMulToKernelRuns(t *testing.T) {
 			}
 			if i >= n && d[i] != complex(mirrorSentinel, 0) {
 				t.Fatalf("n=%d: kernel wrote d[%d], past n", n, i)
+			}
+		}
+		// in place, dst = a and dst = b, through the kernel itself
+		x, y := append([]complex128(nil), a...), append([]complex128(nil), b...)
+		cmulToVSX(f64ptr(&x[0]), f64ptr(&x[0]), f64ptr(&b[0]), n)
+		cmulToVSX(f64ptr(&y[0]), f64ptr(&a[0]), f64ptr(&y[0]), n)
+		for i := 0; i < n; i++ {
+			if !cmulOK(x[i], a[i], b[i]) || !cmulOK(y[i], a[i], b[i]) {
+				t.Fatalf("n=%d in place [%d]: dst=a %v, dst=b %v, want %v", n, i, x[i], y[i], a[i]*b[i])
 			}
 		}
 	}
