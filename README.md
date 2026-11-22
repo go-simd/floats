@@ -375,7 +375,13 @@ undefined. The AVX2+FMA kernel takes four numbers per step with one multiply and
 `VFMADDSUB231PD` per two numbers (real part `fma(ar, br, -(ai*bi))`), then finishes the last
 two and one itself, in one call; the arm64 kernel is the scalar loop in assembly (`FMADDD`,
 `FMSUBD`, paired loads and stores, no bounds checks), not NEON, which lost to Go's loop below
-64 numbers on Neoverse; other CPUs run Go's complex product.
+64 numbers on Neoverse; the s390x kernel (vector facility, z13 and later) holds one complex
+number per register, four per step (`VFMDB`, `VFMADB` on the swapped parts, a sign vector
+for the real part), from 20 numbers; the ppc64le kernel (VSX, POWER8 and later, from 32
+numbers) splits two numbers into real and imaginary vectors (`XXPERMDI`, `XVMULDP`,
+`XVMSUBADP`, `XVMADDADP`, then `XXPERMDI` back), four per step, because the
+one-number-per-register form lost to Go's loop by 11 to 30 % on POWER9; other CPUs run
+Go's complex product.
 The contract is a bound, not bit identity: each part is within 2 eps (2^-52) of `|a|·|b|`
 of the exact product, plus 64 smallest subnormals when a product underflows (the fused
 and the unfused forms both meet it), asserted against a 300-bit `math/big` oracle by
@@ -387,7 +393,13 @@ at 1024 (1.9x to 3x); against go-fft's former unfused AVX2 kernel it is 0.2 ns f
 (memory bound). The v0.32.0 kernel with its Go tail was 6.7 ns at 16. `np.multiply` there
 was 772 ns at 1024 numbers (earlier measurement). Neoverse-N2 (GitHub arm64 runner, load
 0.3, interleaved): 16.0 ns against 19.9 for the Go loop at 16 numbers (23.1 for the v0.32.0
-NEON kernel), 55.8 against 72.5 at 64, 857 against 1135 at 1024.
+NEON kernel), 55.8 against 72.5 at 64, 857 against 1135 at 1024. s390x (z17, load 0.0,
+interleaved, A/A agrees): 30.1 ns against 40.0 for the Go loop at 32 numbers, 50.0 against
+76.4 at 64, 696 against 1157 at 1024 (1.7x); at 16 numbers the loop runs (21.5 against
+21.8). POWER8E (cfarm112, one pinned core): 70.2 against 83.5 at 32, 108.6 against 143.8 at
+64, 1270 against 1954 at 1024 (1.5x). POWER9 (cfarm29, one pinned core): 58.9 against 70.3
+at 32, 107.7 against 117.4 at 64, 1690 against 1753 at 1024 (3.6 %); at 16 numbers the loop
+runs on both (the wrapper costs 2.6 ns over the bare loop on POWER9).
 
 ### Elementwise `Add`, `Sub`, `Div`, `Sqrt`, `ClampScalar` (float64)
 
