@@ -15,3 +15,4 @@ its reason (`cd bench/perf && go test -run TestPerf .` checks it).
 - `MirrorCombine`: no NumPy equivalent (a fused pair pass of a real transform); timed in the DCT-II/III of go-fft/fft#162 against FFTW, not against NumPy.
 - `CMulZipRev`: no NumPy equivalent (a reversed gather fused with a complex multiply); timed in the DCT-III of go-fft/fft#162 against FFTW, not against NumPy.
 - `MirrorCombineSplit`: no NumPy equivalent, as `MirrorCombine`.
+- `AllPass3`: no NumPy equivalent (three Schroeder links of the Parametric Stereo decorrelator over complex rows); timed in go-avkit/decode against the same loop in Go, not against NumPy.
