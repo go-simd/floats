@@ -50,7 +50,10 @@ func sumSqDiff64VSX(a, b []float64) float64
 // the kernel's setup (zeroing eight accumulators, the spill) costs 6-10 ns more
 // than the plain loop (cfarm433, POWER9: n=3 9.5 vs 22 ns, n=8 15 vs 27 ns; at
 // n=16 they tie, from n=32 the kernel wins 1.2x and more). The float32 kernels
-// already tied the naive loop at every n, so they have no threshold.
+// already tied the naive loop at every n, so they have no threshold. Under the
+// threshold a four-accumulator Go loop (smallred.go) replaces the plain loop
+// (cfarm29, POWER9, vs the wrapper with the plain loop: n=8 Dot 15.3 -> 15.0,
+// Sum 13.8 -> 11.9 ns; n=12 Dot 21.2 -> 16.7, Sum 21.5 -> 13.4 ns; n=3 level).
 const vsxMin64 = 16
 
 // hasVSX gates the VSX kernels. They use only ISA-2.06 VSX ops (the ppc64le
@@ -62,8 +65,11 @@ var hasVSX = cpu.PPC64.IsPOWER8
 // ---- float64: naive autovectorizable loops (faster than VSX on POWER9) ----
 
 func dot(a, b []float64) float64 {
-	if hasVSX && len(a) >= vsxMin64 {
+	if len(a) >= vsxMin64 && hasVSX {
 		return dot64VSX(a, b)
+	}
+	if len(a) >= 4 {
+		return dotSmall(a, b)
 	}
 	var s float64
 	for i := range a {
@@ -73,8 +79,8 @@ func dot(a, b []float64) float64 {
 }
 
 func sum(a []float64) float64 {
-	if hasVSX && len(a) >= vsxMin64 {
-		return sum64VSX(a)
+	if len(a) >= 4 {
+		return sumMid(a)
 	}
 	var s float64
 	for _, v := range a {
@@ -83,9 +89,19 @@ func sum(a []float64) float64 {
 	return s
 }
 
+func sumMid(a []float64) float64 {
+	if len(a) >= vsxMin64 && hasVSX {
+		return sum64VSX(a)
+	}
+	return sumSmall(a)
+}
+
 func sumSqDiff(a, b []float64) float64 {
-	if hasVSX && len(a) >= vsxMin64 {
+	if len(a) >= vsxMin64 && hasVSX {
 		return sumSqDiff64VSX(a, b)
+	}
+	if len(a) >= 4 {
+		return sumSqDiffSmall(a, b)
 	}
 	var s float64
 	for i := range a {
