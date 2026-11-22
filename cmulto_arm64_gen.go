@@ -1,12 +1,21 @@
 //go:build ignore
 
-// Command gen produces cmulto_arm64.s with go-asmgen: the NEON kernel of CMulTo
-// (cmulto.go), four complex numbers per step. VLD2 de-interleaves two complex numbers
-// into (V0 = ar, V1 = ai) and (V2 = br, V3 = bi); V4 = ar*br - ai*bi (VFMUL, VFMLS),
-// V5 = ar*bi + ai*br (VFMUL, VFMLA); VST2 interleaves them back. Reads of a step are
-// done before its writes, so dst may be a or b exactly.
+// Command gen produces cmulto_arm64.s with go-asmgen: the arm64 kernel of CMulTo
+// (cmulto.go), n complex numbers in one call: steps of four, then the last n mod 4 one
+// at a time. It is the scalar loop, not NEON: a complex128 is as wide as a 128-bit
+// vector, so NEON saves no multiply and pays shuffles (LD2/ST2 or ZIP, DUP, EXT) on the
+// one or two vector pipes that do the multiplies; on Neoverse-N1 and -N2 the NEON kernel
+// of v0.32.0 lost to Go's loop below n = 64 (go-simd/floats#81). This loop is Go's,
+// without its bounds checks, its call of a tail, or its loop overhead, and measured
+// faster than both at every n (see the pull request).
 //
-// Operand order: `VFMLA Vm, Vn, Vd` is Vd += Vn*Vm.
+// One complex number: FLDPD loads (ar, ai) and (br, bi); E = ar*br (FMULD), E -= ai*bi
+// (FMSUBD) is the real part; F = ar*bi (FMULD), F += ai*br (FMADDD) the imaginary one;
+// FSTPD stores them. Reads of a number are done before its write, so dst may be a or b
+// exactly.
+//
+// Operand order: `FMULD Fm, Fn, Fd` is Fd = Fn*Fm; `FMADDD Fm, Fa, Fn, Fd` is
+// Fd = Fa + Fn*Fm; `FMSUBD Fm, Fa, Fn, Fd` is Fd = Fa - Fn*Fm.
 //
 // Run: go run -modfile=<modfile requiring github.com/go-asmgen/asmgen v0.23.0> cmulto_arm64_gen.go
 package main
@@ -30,24 +39,30 @@ func main() {
 	fmt.Println("wrote cmulto_arm64.s")
 }
 
+// one emits the product of one complex number, four registers of inputs from base fb.
+func one(b *arm64.Builder, fb int) {
+	ar, ai, br, bi, re, im := fb, fb+1, fb+2, fb+3, fb+4, fb+5
+	b.Raw(fmt.Sprintf("FLDPD.P 16(R1), (F%d, F%d)", ar, ai))
+	b.Raw(fmt.Sprintf("FLDPD.P 16(R2), (F%d, F%d)", br, bi))
+	b.Raw(fmt.Sprintf("FMULD F%d, F%d, F%d", br, ar, re))
+	b.Raw(fmt.Sprintf("FMSUBD F%d, F%d, F%d, F%d", bi, re, ai, re))
+	b.Raw(fmt.Sprintf("FMULD F%d, F%d, F%d", bi, ar, im))
+	b.Raw(fmt.Sprintf("FMADDD F%d, F%d, F%d, F%d", br, im, ai, im))
+	b.Raw(fmt.Sprintf("FSTPD.P (F%d, F%d), 16(R0)", re, im))
+}
+
 func kernel() *arm64.Builder {
-	sig := abi.LayoutArgs([]abi.Arg{abi.Scalar("dst", abi.Ptr), abi.Scalar("a", abi.Ptr), abi.Scalar("b", abi.Ptr), abi.Scalar("steps", abi.Int64)}, nil)
-	b := arm64.NewFunc("cmulToNEON", sig, 0)
-	// R0 dst, R1 a, R2 b, R4 steps of 4 complex numbers.
-	b.LoadArg("dst", "R0").LoadArg("a", "R1").LoadArg("b", "R2").LoadArg("steps", "R4").
-		Raw("CBZ R4, done").Label("loop")
-	for k := 0; k < 2; k++ {
-		b.Raw(fmt.Sprintf("VLD2.P 32(R1), [V%d.D2, V%d.D2]", 8*k, 8*k+1))
-		b.Raw(fmt.Sprintf("VLD2.P 32(R2), [V%d.D2, V%d.D2]", 8*k+2, 8*k+3))
+	sig := abi.LayoutArgs([]abi.Arg{abi.Scalar("dst", abi.Ptr), abi.Scalar("a", abi.Ptr), abi.Scalar("b", abi.Ptr), abi.Scalar("n", abi.Int64)}, nil)
+	b := arm64.NewFunc("cmulToFP", sig, 0)
+	// R0 dst, R1 a, R2 b, R4 n complex numbers, R5 steps of four.
+	b.LoadArg("dst", "R0").LoadArg("a", "R1").LoadArg("b", "R2").LoadArg("n", "R4").
+		Raw("LSR $2, R4, R5").Raw("CBZ R5, rem").Label("loop")
+	for k := 0; k < 4; k++ {
+		one(b, 8*k)
 	}
-	for k := 0; k < 2; k++ {
-		ar, ai, br, bi, re, im := 8*k, 8*k+1, 8*k+2, 8*k+3, 8*k+4, 8*k+5
-		b.Raw(fmt.Sprintf("VFMUL V%d.D2, V%d.D2, V%d.D2", br, ar, re))
-		b.Raw(fmt.Sprintf("VFMUL V%d.D2, V%d.D2, V%d.D2", bi, ar, im))
-		b.Raw(fmt.Sprintf("VFMLS V%d.D2, V%d.D2, V%d.D2", bi, ai, re))
-		b.Raw(fmt.Sprintf("VFMLA V%d.D2, V%d.D2, V%d.D2", br, ai, im))
-		b.Raw(fmt.Sprintf("VST2.P [V%d.D2, V%d.D2], 32(R0)", re, im))
-	}
-	b.Raw("SUBS $1, R4, R4").Raw("BNE loop").Label("done").Ret()
+	b.Raw("SUBS $1, R5, R5").Raw("BNE loop").Label("rem").
+		Raw("AND $3, R4, R4").Raw("CBZ R4, done").Label("remloop")
+	one(b, 0)
+	b.Raw("SUBS $1, R4, R4").Raw("BNE remloop").Label("done").Ret()
 	return b
 }

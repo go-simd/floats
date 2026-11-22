@@ -372,17 +372,20 @@ Max 47 to 18 ns (2.6x).
 filter of a frequency-domain convolution. It panics, before writing anything, if `a` or `b` is
 shorter than `dst`; `dst` may be `a` or `b` exactly (in place), any other overlap is
 undefined. The AVX2+FMA kernel takes four numbers per step with one multiply and one
-`VFMADDSUB231PD` per two numbers (real part `fma(ar, br, -(ai*bi))`); the NEON kernel
-de-interleaves with `VLD2` and uses `VFMLS`/`VFMLA`; other CPUs run Go's complex product.
+`VFMADDSUB231PD` per two numbers (real part `fma(ar, br, -(ai*bi))`), then finishes the last
+two and one itself, in one call; the arm64 kernel is the scalar loop in assembly (`FMADDD`,
+`FMSUBD`, paired loads and stores, no bounds checks), not NEON, which lost to Go's loop below
+64 numbers on Neoverse; other CPUs run Go's complex product.
 The contract is a bound, not bit identity: each part is within 2 eps (2^-52) of `|a|·|b|`
 of the exact product, plus 64 smallest subnormals when a product underflows (the fused
 and the unfused forms both meet it), asserted against a 300-bit `math/big` oracle by
 `TestCMulToOracle`, with in-place, panic-before-write, guard-page, noescape and fuzz tests.
-Measured on one core, against the scalar Go loop: Ryzen 9 7950X 2.2x at 1024 numbers
-(287 ns against 621) and 1.8x at 65536; `np.multiply` there 772 ns and 24.4 us, so 2.7x
-and 1.1x faster. M4 Max (under load, not a valid table): 1.3x to 2.6x faster from 64 numbers
-on, a tie at 16. It equals go-fft's AVX2 kernel from 256 numbers (memory bound) and is 0.9 ns
-behind it at 16 and 64 (the call overhead).
+Measured on one core (Zen 4, interleaved, median of 21 rounds, load below 1), against the
+scalar Go loop: 5.7 ns against 10.9 at 16 numbers, 13.4 against 39.9 at 64, 295 against 630
+at 1024 (1.9x to 3x); against go-fft's former unfused AVX2 kernel it is 0.2 ns faster at 16,
+0.5 at 32, 0.8 at 64, 1.4 at 128, 2.6 at 256, 8.5 at 512 and 2 ns (0.7 %) slower at 1024
+(memory bound). The v0.32.0 kernel with its Go tail was 6.7 ns at 16. `np.multiply` there
+was 772 ns at 1024 numbers (earlier measurement).
 
 ### Elementwise `Add`, `Sub`, `Div`, `Sqrt`, `ClampScalar` (float64)
 
