@@ -12,15 +12,15 @@ import (
 // (cmulto_ppc64le_gen.go) into cmulto_ppc64le.s: VSX (the POWER8 baseline, as the other
 // ppc64le kernels), one complex number per vector register, pairs split into real and
 // imaginary vectors, four numbers per step with the next step's loads issued first, and
-// the n&3 last numbers done before the loop. go:noescape.
+// the n&3 last numbers done before the loop, the loop counted on CTR. go:noescape.
 //
 //go:noescape
 func cmulToVSX(dst, a, b *float64, n int)
 
 // cmulToVSXMin is the length from which the kernel beats the portable loop on POWER8
-// (measured in the pull request); below it the loop wins (POWER9: n=33 loses by 2 %,
-// n=47 wins by 16 %; n in 40..46 not measured).
-const cmulToVSXMin = 40
+// (POWER8 re-measurement pending); on POWER9 (n = 30..130 step 1) the kernel ties the loop
+// up to n=34 and wins from n=35 (by 10 % there, 20 to 27 % at n=36..48, 12 % from 64 up).
+const cmulToVSXMin = 35
 
 // cmulToVSXOn is the VSX gate (POWER8 and later). The first variant, one number per
 // register, lost to the Go loop on POWER9 by 11 to 30 %; splitting two numbers into real
