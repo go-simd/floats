@@ -109,14 +109,16 @@ func sumSqDiff32(a, b []float32) float32 {
 }
 
 func axpy(alpha float64, x, y []float64) {
-	// axpyAVX2 itself takes an XMM-only path below 16 elements (no YMM
-	// broadcast, no VZEROUPPER), which is faster there than the 4-wide loop.
-	if hasAVX2FMA {
-		axpyAVX2(alpha, x, y)
-		return
-	}
-	axpyRef(alpha, x, y)
+	// axpyAVX2 checks hasAVX2FMA itself (falling back to axpyRefNoInline) and
+	// takes an XMM-only path below 16 elements, so this is one call and inlines.
+	axpyAVX2(alpha, x, y)
 }
+
+// axpyRefNoInline is the target of axpyAVX2's tail jump on a CPU without
+// AVX2+FMA; it must not be inlined away, and it keeps axpyAVX2's signature.
+//
+//go:noinline
+func axpyRefNoInline(alpha float64, x, y []float64) { axpyRef(alpha, x, y) }
 
 func xpby(beta float64, x, y []float64) {
 	if hasAVX2FMA {

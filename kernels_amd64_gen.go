@@ -293,7 +293,11 @@ func mem(base string, off int) string {
 // axpyF64: y[i] = fma(alpha, x[i], y[i]).
 func axpyF64() *amd64.Builder {
 	b := amd64.NewFunc("axpyAVX2", axpySig("alpha"), 0)
-	b.LoadArg("alpha", "X0").LoadArg("x_base", "SI").LoadArg("x_len", "CX").LoadArg("y_base", "DI").
+	// The dispatch lives here so that axpy is one call and inlines into Axpy
+	// (one call level less, which is the whole cost for 4..15 elements): a CPU
+	// without AVX2+FMA tail-jumps to the Go reference with the same frame.
+	b.Raw("CMPB ·hasAVX2FMA(SB), $0").Raw("JEQ noavx").
+		LoadArg("alpha", "X0").LoadArg("x_base", "SI").LoadArg("x_len", "CX").LoadArg("y_base", "DI").
 		Raw("CMPQ CX, $16").Raw("JGE big").
 		// n < 16: XMM registers only. No YMM register is touched, so there is
 		// no VZEROUPPER, and the broadcast is a VMOVDDUP; for a handful of
@@ -335,7 +339,9 @@ func axpyF64() *amd64.Builder {
 			Raw("VFMADD231SD (SI)(AX*8), X0, X1").
 			Raw("VMOVSD X1, (DI)(AX*8)")
 	})
-	b.Raw("VZEROUPPER").Ret()
+	b.Raw("VZEROUPPER").Ret().
+		Label("noavx").
+		Raw("JMP ·axpyRefNoInline(SB)")
 	return b
 }
 

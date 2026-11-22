@@ -190,6 +190,8 @@ done:
 	RET
 
 TEXT ·axpyAVX2(SB), NOSPLIT, $0-56
+	CMPB ·hasAVX2FMA(SB), $0
+	JEQ noavx
 	MOVSD alpha+0(FP), X0
 	MOVQ x_base+8(FP), SI
 	MOVQ x_len+16(FP), CX
@@ -267,6 +269,8 @@ sloop:
 done:
 	VZEROUPPER
 	RET
+noavx:
+	JMP ·axpyRefNoInline(SB)
 
 TEXT ·xpbyAVX2(SB), NOSPLIT, $0-56
 	MOVSD beta+0(FP), X0
