@@ -69,6 +69,7 @@ func main() {
 	f := emit.NewFile("s390x")
 	f.Add(sumF64().Func())
 	f.Add(ssdF64().Func())
+	f.Add(axpyF64().Func())
 	if err := os.WriteFile("kernels_s390x.s", []byte(f.String()), 0o644); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -108,6 +109,43 @@ func sumF64() *s390x.Builder {
 		Raw("FADD F1, F0").
 		Raw("ADD $1, R4, R4").Raw("BR sloop").
 		Label("done").StoreRet("F0", "ret").Ret()
+	return b
+}
+
+// axpyF64: y[i] = fma(alpha, x[i], y[i]), eight elements (four vectors) per
+// iteration, then two, then one. R1 walks x, R3 walks y, R2 counts what is left.
+func axpyF64() *s390x.Builder {
+	sig := abi.LayoutArgs(
+		[]abi.Arg{abi.Scalar("alpha", abi.Float64), abi.Slice("x"), abi.Slice("y")},
+		nil,
+	)
+	b := s390x.NewFunc("axpyVX", sig, 0)
+	b.LoadArg("x_base", "R1").LoadArg("x_len", "R2").LoadArg("y_base", "R3").
+		Raw("FMOVD alpha+0(FP), F0").
+		Raw("VLREPG alpha+0(FP), V3").
+		Label("uloop").
+		Raw("CMPBLT R2, $8, vloop").
+		Raw("VL (R1), V1").Raw("VL 16(R1), V2").Raw("VL 32(R1), V4").Raw("VL 48(R1), V5").
+		Raw("VL (R3), V6").Raw("VL 16(R3), V7").Raw("VL 32(R3), V8").Raw("VL 48(R3), V9").
+		Raw("VFMADB V1, V3, V6, V6"). // Vd = Va*Vb + Vc
+		Raw("VFMADB V2, V3, V7, V7").
+		Raw("VFMADB V4, V3, V8, V8").
+		Raw("VFMADB V5, V3, V9, V9").
+		Raw("VST V6, (R3)").Raw("VST V7, 16(R3)").Raw("VST V8, 32(R3)").Raw("VST V9, 48(R3)").
+		Raw("ADD $64, R1").Raw("ADD $64, R3").Raw("SUB $8, R2").Raw("BR uloop").
+		Label("vloop").
+		Raw("CMPBLT R2, $2, sloop").
+		Raw("VL (R1), V1").Raw("VL (R3), V6").
+		Raw("VFMADB V1, V3, V6, V6").
+		Raw("VST V6, (R3)").
+		Raw("ADD $16, R1").Raw("ADD $16, R3").Raw("SUB $2, R2").Raw("BR vloop").
+		Label("sloop").
+		Raw("CMPBEQ R2, $0, done").
+		Raw("FMOVD (R1), F1").
+		Raw("FMOVD (R3), F2").
+		Raw("FMADD F0, F1, F2"). // F2 += F0*F1
+		Raw("FMOVD F2, (R3)").
+		Label("done").Ret()
 	return b
 }
 
