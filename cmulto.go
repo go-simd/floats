@@ -16,7 +16,8 @@ package floats
 // fma(ar, br, -(ai*bi)) and the imaginary part as fma(ar, bi, ai*br) (two roundings
 // of one product each, one fused); the portable loop is Go's complex product, which a
 // compiler may fuse in the same way (arm64 does, amd64 does not), so the paths can
-// differ in the last bit and all are within the bound. Overflow gives Inf or NaN as
+// differ in the last bit and all are within the bound. The s390x (VX) and ppc64le
+// (VSX, POWER8 only) kernels use one multiply and one fused multiply-add per number. Overflow gives Inf or NaN as
 // Go's complex product does; the bound holds where nothing overflows.
 //
 // len(a) and len(b) must be at least len(dst). dst may be a or b (in place), exactly:
