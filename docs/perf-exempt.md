@@ -17,6 +17,10 @@ its reason (`cd bench/perf && go test -run TestPerf .` checks it).
 - `Mul32`: NumPy timing deferred (`np.multiply`), as `Add32`.
 - `Div32`: NumPy timing deferred (`np.divide`), as `Add32`.
 - `Sqrt32`: NumPy timing deferred (`np.sqrt`), as `Add32`.
+- `NewAllPass3Plan`: the proved-memory form of `AllPass3` (allocation, no kernel work); timed in go-avkit/decode against the same loop in Go, as `AllPass3`.
+- `AllPass3Plan.Run`: the kernel of `AllPass3` behind slot numbers; as `AllPass3`, timed in go-avkit/decode (`BenchmarkAllPass3Plan` here against the checked call).
+- `AllPass3Plan.Out`: an accessor of the plan's output slice, no work to time.
+- `AllPass3Plan.Rows`: an accessor of the plan's row count, no work to time.
 - `MirrorCombine`: no NumPy equivalent (a fused pair pass of a real transform); timed in the DCT-II/III of go-fft/fft#162 against FFTW, not against NumPy.
 - `CMulZipRev`: no NumPy equivalent (a reversed gather fused with a complex multiply); timed in the DCT-III of go-fft/fft#162 against FFTW, not against NumPy.
 - `MirrorCombineSplit`: no NumPy equivalent, as `MirrorCombine`.

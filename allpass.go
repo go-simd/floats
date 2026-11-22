@@ -91,18 +91,24 @@ func allPassShort(n int, in []complex128, t *AllPassRows, old, cur *[3][]complex
 }
 
 // span is the byte range [lo, hi) of the first n elements of an operand.
-type span struct{ lo, hi uintptr }
+// The addresses are widened to int64, so a difference of two of them is exact on every
+// word size.
+type span struct{ lo, hi int64 }
 
-func (a span) meets(b span) bool { return a.lo < b.hi && b.lo < a.hi }
+// meets is a.lo < b.hi && b.lo < a.hi as the sign of one value: both differences are
+// negative exactly when the ranges share a byte, and the AND of two int64 is negative
+// exactly when both are. It has no branch, so a caller can OR many of them and test the
+// sign once. (The operands are non-empty: allPassShort and n > 0 hold before it runs.)
+func (a span) meets(b span) int64 { return (a.lo - b.hi) & (b.lo - a.hi) }
 
 func cspan(s []complex128, n int) span {
-	lo := uintptr(unsafe.Pointer(&s[0]))
-	return span{lo, lo + uintptr(n)*unsafe.Sizeof(s[0])}
+	lo := int64(uint64(uintptr(unsafe.Pointer(unsafe.SliceData(s)))))
+	return span{lo, lo + int64(n)*int64(unsafe.Sizeof(s[0]))}
 }
 
 func fspan(s []float64, n int) span {
-	lo := uintptr(unsafe.Pointer(&s[0]))
-	return span{lo, lo + uintptr(n)*unsafe.Sizeof(s[0])}
+	lo := int64(uint64(uintptr(unsafe.Pointer(unsafe.SliceData(s)))))
+	return span{lo, lo + int64(n)*int64(unsafe.Sizeof(s[0]))}
 }
 
 // allPassOverlap reports whether a written operand (out, cur_l) meets another written
@@ -112,19 +118,19 @@ func allPassOverlap(n int, out, in []complex128, t *AllPassRows, old, cur *[3][]
 	r := [11]span{cspan(in, n), cspan(old[0], n), cspan(old[1], n), cspan(old[2], n),
 		cspan(t.Phi, n), cspan(t.Q0, n), cspan(t.Q1, n), cspan(t.Q2, n),
 		fspan(t.C0, n), fspan(t.C1, n), fspan(t.C2, n)}
-	for i, a := range w {
-		for _, b := range w[i+1:] {
-			if a.meets(b) {
-				return true
-			}
+	var hit int64
+	// indexed, not ranged over the arrays: a range copies them, and the copy reads 16
+	// bytes across two 8-byte stores just made, a store-forwarding stall (measured in
+	// go-avkit/decode#77, a third of this function's time)
+	for i := range w {
+		for j := i + 1; j < len(w); j++ {
+			hit |= w[i].meets(w[j])
 		}
-		for _, b := range r {
-			if a.meets(b) {
-				return true
-			}
+		for j := range r {
+			hit |= w[i].meets(r[j])
 		}
 	}
-	return false
+	return hit < 0
 }
 
 // cmulCoef is the product of the coefficient a and the data d as the kernels compute it:
