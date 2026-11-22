@@ -70,12 +70,16 @@ const binop32SSEFrom = 1 << 16
 // Only Milan-X (EPYC 7773X) was measured; the other Zen 3 parts share the core.
 var div32HalvesCPU = func() bool {
 	maxLeaf, ebx, ecx, edx := cpuid(0, 0)
-	if maxLeaf < 1 || ebx != 0x68747541 || edx != 0x69746e65 || ecx != 0x444d4163 { // "AuthenticAMD"
-		return false
-	}
-	eax, _, _, _ := cpuid(1, 0)
-	return isZen3(eax)
+	sig, _, _, _ := cpuid(1, 0)
+	return zen3Signature(maxLeaf, ebx, ecx, edx, sig)
 }()
+
+// zen3Signature takes the registers of CPUID leaf 0 (maximum leaf, vendor in
+// EBX, EDX, ECX) and the EAX of leaf 1.
+func zen3Signature(maxLeaf, ebx, ecx, edx, sig uint32) bool {
+	return maxLeaf >= 1 && ebx == 0x68747541 && edx == 0x69746e65 && ecx == 0x444d4163 && // "AuthenticAMD"
+		isZen3(sig)
+}
 
 // isZen3 decodes CPUID leaf 1 EAX (AMD APM vol. 3, CPUID Fn0000_0001): family 19h,
 // model in the Zen 3 ranges.

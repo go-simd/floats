@@ -86,4 +86,32 @@ func TestIsZen3(t *testing.T) {
 		}
 	}
 	t.Logf("div32HalvesCPU = %v", div32HalvesCPU)
+	const b, c, d = 0x68747541, 0x444d4163, 0x69746e65 // "Auth", "cAMD", "enti"
+	if !zen3Signature(1, b, c, d, 0x00a00f11) {
+		t.Error("AMD Milan-X not recognised")
+	}
+	if zen3Signature(0, b, c, d, 0x00a00f11) || zen3Signature(1, 0x756e6547, 0x6c65746e, 0x49656e69, 0x00a00f11) ||
+		zen3Signature(1, b, c, d, 0x00a60f12) {
+		t.Error("a non-Zen 3 signature was accepted")
+	}
+}
+
+// TestDiv32DispatchBothKernels runs div32 with the CPU gate forced both ways.
+func TestDiv32DispatchBothKernels(t *testing.T) {
+	if !hasAVX2FMA {
+		t.Skip("no AVX2+FMA")
+	}
+	saved := div32HalvesCPU
+	defer func() { div32HalvesCPU = saved }()
+	a, b := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9}, []float32{2, 4, 8, 16, 32, 64, 128, 256, 512}
+	for _, on := range []bool{false, true} {
+		div32HalvesCPU = on
+		dst := make([]float32, len(a))
+		div32(dst, a, b)
+		for i := range a {
+			if dst[i] != a[i]/b[i] {
+				t.Fatalf("gate %v: dst[%d] = %v, want %v", on, i, dst[i], a[i]/b[i])
+			}
+		}
+	}
 }
