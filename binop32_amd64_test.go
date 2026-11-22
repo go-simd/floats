@@ -16,7 +16,8 @@ func TestDispatchAMD64Binop32(t *testing.T) {
 
 	rng := rand.New(rand.NewSource(98))
 	check := func(label string) {
-		for _, n := range []int{0, 1, 3, 4, 5, 7, 8, 9, 15, 16, 17, 31, 32, 33, 100, 257} {
+		for _, n := range []int{0, 1, 3, 4, 5, 7, 8, 9, 15, 16, 17, 31, 32, 33, 100, 257,
+			binop32SSEFrom - 1, binop32SSEFrom, binop32SSEFrom + 1, binop32SSEFrom + 37} {
 			a, _ := fill32(n, 0, rng, true)
 			b, _ := fill32(n, 1, rng, true)
 			got, want := make([]float32, n), make([]float32, n)
