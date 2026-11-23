@@ -477,8 +477,10 @@ memory and on Zen 3 (EPYC 7773X) the 128-bit loop is 7-10 % faster (`Add32` n=1e
 against 181 us); `Div32` has no such switch. On Zen 3 (CPUID family 19h, detected at
 start-up) its AVX2 kernel loads each 8-float operand as two 128-bit halves (`VMOVUPS`,
 `VINSERTF128`) feeding 256-bit `VDIVPS`, and stores them as halves, which is 6-8 % faster
-than whole-register moves past L2 (EPYC 7773X, n=1e6 164 us against 178 us, NumPy 2.5.4
-174 us, same core, interleaved rounds); on Zen 4 that shape is 9-13 % slower, so other
+than whole-register moves past L2 (EPYC 7773X, n=1e6 164 us against 178 us, same core,
+interleaved rounds). NumPy 2.5.4 read 174 us in that run and 166-168 us in three later
+ones on the same host, so at n=1e6 `Div32` is 2-5 % faster than NumPy, not a fixed margin: the
+host's run-to-run spread is about 5 %, the minimum of every caller is 162-164 us; on Zen 4 that shape is 9-13 % slower, so other
 CPUs keep the whole-register AVX2 kernel (Ryzen 9 7950X n=1e6 83 us, NumPy 92 us). Results are bit-identical
 either way. The loong64, ppc64le, riscv64 and s390x kernels are unmeasured on
 hardware (the QEMU lanes check them, they are not timings). `go test -bench Binop32` times each kernel against the scalar loop; the
