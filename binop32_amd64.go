@@ -60,7 +60,8 @@ func sqrt32SSE2(dst, src []float32)
 // AVX2 kernel with its 256-bit divide fed and drained by 128-bit halves
 // (div32AVX2Halves, floats#93) wins at every length, with the memory side of the
 // SSE2 loop (EPYC 7773X, 1e5: 16.5 us against 17.7 us; 1e6: 164 us against 178 us
-// in the same rounds; NumPy 2.5.4 174 us). On Zen 4 (Ryzen 9 7950X) it LOSES 9-13 %
+// in the same rounds; NumPy 2.5.4 read 174 us then and 166-168 us in later runs
+// on the same host: 2-5 % behind, not a fixed margin). On Zen 4 (Ryzen 9 7950X) it LOSES 9-13 %
 // (1e6: 94.6 us against 83.4 us), so the other CPUs keep div32AVX2. Results are
 // bit-identical either way (one IEEE operation per lane).
 const binop32SSEFrom = 1 << 16
