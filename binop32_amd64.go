@@ -24,6 +24,15 @@ func div32AVX2(dst, a, b []float32)
 //go:noescape
 func sqrt32AVX2(dst, src []float32)
 
+// div32AVX2Halves is div32AVX2 with its 256-bit divide fed and drained by 128-bit
+// halves (floats#93); div32 picks it on Zen 3 only.
+//
+//go:noescape
+func div32AVX2Halves(dst, a, b []float32)
+
+// cpuid is the CPUID instruction.
+func cpuid(op, sub uint32) (eax, ebx, ecx, edx uint32)
+
 //go:noescape
 func add32SSE2(dst, a, b []float32)
 
@@ -46,10 +55,45 @@ func sqrt32SSE2(dst, src []float32)
 // 256-bit one (EPYC 7773X, BenchmarkBinop32Variants: Add32 n=65536 9.7 us vs
 // 10.5 us, n=1e6 165 us vs 181 us; below 32768 the AVX2 kernel is as fast or up
 // to 2.3x faster). Neither a different unroll depth nor a 32-byte aligned
-// destination closed the gap. Div32 is bound by the divider, where the AVX2
-// kernel wins at every length, so it has no threshold. Results are bit-identical
-// either way (one IEEE operation per lane).
+// destination closed the gap. Div32 has no threshold: the 128-bit divide is
+// divider-bound (n=1e6: 245 us against 175 us for the 256-bit one). On Zen 3 the
+// AVX2 kernel with its 256-bit divide fed and drained by 128-bit halves
+// (div32AVX2Halves, floats#93) wins at every length, with the memory side of the
+// SSE2 loop (EPYC 7773X, 1e5: 16.5 us against 17.7 us; 1e6: 164 us against 178 us
+// in the same rounds; NumPy 2.5.4 174 us). On Zen 4 (Ryzen 9 7950X) it LOSES 9-13 %
+// (1e6: 94.6 us against 83.4 us), so the other CPUs keep div32AVX2. Results are
+// bit-identical either way (one IEEE operation per lane).
 const binop32SSEFrom = 1 << 16
+
+// div32HalvesCPU reports whether div32 uses div32AVX2Halves: an AMD CPU of Zen 3
+// (family 19h, models 00h-0Fh Milan, 20h-2Fh Vermeer, 40h-5Fh Rembrandt/Cezanne).
+// Only Milan-X (EPYC 7773X) was measured; the other Zen 3 parts share the core.
+var div32HalvesCPU = func() bool {
+	maxLeaf, ebx, ecx, edx := cpuid(0, 0)
+	sig, _, _, _ := cpuid(1, 0)
+	return zen3Signature(maxLeaf, ebx, ecx, edx, sig)
+}()
+
+// zen3Signature takes the registers of CPUID leaf 0 (maximum leaf, vendor in
+// EBX, EDX, ECX) and the EAX of leaf 1.
+func zen3Signature(maxLeaf, ebx, ecx, edx, sig uint32) bool {
+	return maxLeaf >= 1 && ebx == 0x68747541 && edx == 0x69746e65 && ecx == 0x444d4163 && // "AuthenticAMD"
+		isZen3(sig)
+}
+
+// isZen3 decodes CPUID leaf 1 EAX (AMD APM vol. 3, CPUID Fn0000_0001): family 19h,
+// model in the Zen 3 ranges.
+func isZen3(eax uint32) bool {
+	family := (eax >> 8) & 0xf
+	if family == 0xf {
+		family += (eax >> 20) & 0xff
+	}
+	model := (eax>>4)&0xf | (eax>>12)&0xf0
+	if family != 0x19 {
+		return false
+	}
+	return model <= 0x0f || (model >= 0x20 && model <= 0x2f) || (model >= 0x40 && model <= 0x5f)
+}
 
 func add32(dst, a, b []float32) {
 	if hasAVX2FMA && len(dst) < binop32SSEFrom {
@@ -77,6 +121,10 @@ func mul32(dst, a, b []float32) {
 
 func div32(dst, a, b []float32) {
 	if hasAVX2FMA {
+		if div32HalvesCPU {
+			div32AVX2Halves(dst, a, b)
+			return
+		}
 		div32AVX2(dst, a, b)
 		return
 	}

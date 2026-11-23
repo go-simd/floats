@@ -8,7 +8,9 @@
 //     elements) per iteration, then one register (8), then one float. VADDPS /
 //     VSUBPS / VMULPS / VDIVPS / VSQRTPS and VADDSS / VSUBSS / VMULSS / VDIVSS /
 //     VSQRTSS (Intel SDM vol. 2). They share the gate of the other AVX2 kernels
-//     (hasAVX2FMA); no FMA instruction appears.
+//     (hasAVX2FMA); no FMA instruction appears. div32AVX2Halves is a second Div32
+//     kernel: YMM divides fed and drained by 128-bit halves, two registers per
+//     iteration (divAVX2Halves), chosen on Zen 3 only (div32HalvesCPU).
 //   - SSE2 (add32SSE2 ...): four floats per XMM register, 16 / 4 / 1 elements per
 //     step, ADDPS ... SQRTPS and ADDSS ... SQRTSS. SSE2 is the amd64 baseline, so
 //     it runs on a CPU without AVX2+FMA. Memory operands of packed SSE
@@ -42,10 +44,14 @@ func main() {
 		{"div32", "VDIVPS", "VDIVSS", "DIVPS", "DIVSS"},
 	} {
 		f.Add(binopAVX(op.name+"AVX2", op.avxP, op.avxS).Func())
+		if op.name == "div32" {
+			f.Add(divAVX2Halves("div32AVX2Halves").Func())
+		}
 		f.Add(binopSSE(op.name+"SSE2", op.sseP, op.sseS).Func())
 	}
 	f.Add(sqrtAVX().Func())
 	f.Add(sqrtSSE().Func())
+	f.Add(cpuidFunc().Func())
 	if err := os.WriteFile("binop32_amd64.s", []byte(f.String()), 0o644); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -58,11 +64,16 @@ func main() {
 // element index, CX the length. vec(k, regs) emits the block of `regs` registers
 // starting at register k's byte offset; sca the scalar step.
 func elemLoop(b *amd64.Builder, w int, vec func(regs int), sca func()) {
-	big := 4 * w
+	elemLoopN(b, w, 4, vec, sca)
+}
+
+// elemLoopN is elemLoop with `unroll` registers per big step.
+func elemLoopN(b *amd64.Builder, w, unroll int, vec func(regs int), sca func()) {
+	big := unroll * w
 	b.Raw("XORQ AX, AX").
 		Label("uloop").
 		Raw("LEAQ %d(AX), R8", big).Raw("CMPQ R8, CX").Raw("JGT vloop")
-	vec(4)
+	vec(unroll)
 	b.Raw("ADDQ $%d, AX", big).Raw("JMP uloop").
 		Label("vloop").
 		Raw("LEAQ %d(AX), R8", w).Raw("CMPQ R8, CX").Raw("JGT sloop")
@@ -102,6 +113,55 @@ func binopAVX(name, vop, sop string) *amd64.Builder {
 			Raw("VMOVSS X1, (DI)(AX*4)")
 	})
 	b.Raw("VZEROUPPER").Ret()
+	return b
+}
+
+// divAVX2Halves: dst[i] = a[i] / b[i] with VDIVPS on YMM registers fed and
+// drained by 128-bit halves (VMOVUPS xmm + VINSERTF128 from memory in, VMOVUPS
+// xmm + VEXTRACTF128 to memory out), two YMM registers (16 elements) per
+// iteration, loads of a and b first, then the divides, then the stores: the
+// shape of NumPy's float32 divide loop (numpy/_core/src/umath/
+// loops_arithm_fp.dispatch.c.src, v2.5.5, lines 103-112: two vectors per
+// iteration, all loads, then the divides, then the stores) with the memory side
+// of the 128-bit SSE2 loop. On Zen 3 the divider keeps its 256-bit throughput
+// while the memory system sees the access pattern that moves data best
+// (floats#93). Y1,Y2 hold a, Y9,Y10 hold b. Tail: one YMM (8), then one float.
+func divAVX2Halves(name string) *amd64.Builder {
+	b := amd64.NewFunc(name, abi.LayoutArgs(sig3(), nil), 0)
+	b.LoadArg("dst_base", "DI").LoadArg("a_base", "SI").LoadArg("a_len", "CX").LoadArg("b_base", "DX")
+	elemLoopN(b, 8, 2, func(regs int) {
+		for k := 0; k < regs; k++ {
+			b.Raw("VMOVUPS %s, X%d", mem("SI", 32*k), 1+k).
+				Raw("VINSERTF128 $1, %s, Y%d, Y%d", mem("SI", 32*k+16), 1+k, 1+k).
+				Raw("VMOVUPS %s, X%d", mem("DX", 32*k), 9+k).
+				Raw("VINSERTF128 $1, %s, Y%d, Y%d", mem("DX", 32*k+16), 9+k, 9+k)
+		}
+		for k := 0; k < regs; k++ {
+			b.Raw("VDIVPS Y%d, Y%d, Y%d", 9+k, 1+k, 1+k) // Y = a / b
+		}
+		for k := 0; k < regs; k++ {
+			b.Raw("VMOVUPS X%d, %s", 1+k, mem("DI", 32*k)).
+				Raw("VEXTRACTF128 $1, Y%d, %s", 1+k, mem("DI", 32*k+16))
+		}
+	}, func() {
+		b.Raw("VMOVSS (SI)(AX*4), X1").
+			Raw("VDIVSS (DX)(AX*4), X1, X1").
+			Raw("VMOVSS X1, (DI)(AX*4)")
+	})
+	b.Raw("VZEROUPPER").Ret()
+	return b
+}
+
+// cpuidFunc: func cpuid(op, sub uint32) (eax, ebx, ecx, edx uint32), the CPUID
+// instruction (Intel SDM vol. 2, CPUID). It selects the Div32 kernel by CPU
+// family and model (div32HalvesCPU).
+func cpuidFunc() *amd64.Builder {
+	u := abi.Uint32
+	b := amd64.NewFunc("cpuid", abi.LayoutArgs(
+		[]abi.Arg{abi.Scalar("op", u), abi.Scalar("sub", u)},
+		[]abi.Arg{abi.Scalar("eax", u), abi.Scalar("ebx", u), abi.Scalar("ecx", u), abi.Scalar("edx", u)}), 0)
+	b.LoadArg("op", "AX").LoadArg("sub", "CX").Raw("CPUID").
+		StoreRet("AX", "eax").StoreRet("BX", "ebx").StoreRet("CX", "ecx").StoreRet("DX", "edx").Ret()
 	return b
 }
 
