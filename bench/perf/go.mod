@@ -4,7 +4,7 @@ go 1.27.3
 
 require (
 	github.com/go-scikit/refbench v0.4.1
-	github.com/go-simd/floats v0.0.0
+	github.com/go-simd/floats v0.42.0
 )
 
 require (
