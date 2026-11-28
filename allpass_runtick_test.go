@@ -2,6 +2,7 @@ package floats
 
 import (
 	"math"
+	"math/bits"
 	"math/rand"
 	"testing"
 )
@@ -96,7 +97,7 @@ func TestAllPass3PlanRunTickAnyTick(t *testing.T) {
 		t.Fatal(err)
 	}
 	ticks := []int{0, 1, -1, -2, 7, math.MaxInt, math.MinInt, math.MaxInt - 1, math.MinInt + 1,
-		math.MaxInt32, math.MinInt32, 1 << 40, -(1 << 40)}
+		math.MaxInt32, math.MinInt32, 1 << (bits.UintSize/2 + 8), -(1 << (bits.UintSize/2 + 8))}
 	for i := 0; i < 200; i++ {
 		ticks = append(ticks, int(rng.Uint64()))
 	}
