@@ -29,3 +29,8 @@ its reason (`cd bench/perf && go test -run TestPerf .` checks it).
 - `CMulTo`: NumPy timing deferred (`np.multiply` on complex128; a valid refbench run needs a 1-minute load below 8, it was 25 to 45 on the arm64 machine that writes perf.json). Timed ad hoc (v0.32.0 kernel) on one Zen 4 core against `np.multiply(a, b, out=d)`: 14 ns against 299 at 64 numbers, 287 against 772 at 1024, 21.9 us against 24.4 us at 65536; README.
 - `MulAddRows32`: no NumPy equivalent (a row-wise float32 window sum of a polyphase bank); timed against the portable float64 `MulAddRows` on the same shape (13.7 ns against 23.8 ns, 64 columns, 10 rows, one Zen 4 core) by `go test -bench MulAddRows32`, and in go-avkit/decode#77.
 - `AllPass3`: no NumPy equivalent (three Schroeder links of the Parametric Stereo decorrelator over complex rows); timed in go-avkit/decode against the same loop in Go, not against NumPy.
+- `AllPass3Split32`: no NumPy equivalent (the float32 split-plane form of `AllPass3`); timed here against the float64 `AllPass3` by `BenchmarkAllPass3Split32`, and in go-avkit/decode#77.
+- `NewAllPass3TickPlan32`: the proved-memory form of `AllPass3Split32` (allocation, no kernel work); as `AllPass3Split32`.
+- `AllPass3Plan32.RunTick`: the kernel of `AllPass3Split32` behind a tick counter, no per-call check; `BenchmarkAllPass3Split32/plan-tick`.
+- `AllPass3Plan32.Out`: an accessor of the plan's output planes, no work to time.
+- `AllPass3Plan32.Rows`: an accessor of the plan's row count, no work to time.
