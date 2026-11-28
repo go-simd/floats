@@ -31,7 +31,8 @@ its reason (`cd bench/perf && go test -run TestPerf .` checks it).
 - `AllPass3`: no NumPy equivalent (three Schroeder links of the Parametric Stereo decorrelator over complex rows); timed in go-avkit/decode against the same loop in Go, not against NumPy.
 - `AllPass3Split32`: no NumPy equivalent (the float32 split-plane form of `AllPass3`); timed here against the float64 `AllPass3` by `BenchmarkAllPass3Split32`, and in go-avkit/decode#77.
 - `NewAllPass3TickPlan32`: the proved-memory form of `AllPass3Split32` (allocation, no kernel work); as `AllPass3Split32`.
-- `NewPSMixPlan32`, `PSMixPlan32.Runs`: construction and accessor of the plan of `PSMixPlan32.Run` (allocation, no kernel work).
+- `NewPSMixPlan32`: construction of the plan of `PSMixPlan32.Run` (allocation, no kernel work).
+- `PSMixPlan32.Runs`: accessor of the plan of `PSMixPlan32.Run` (a length, no kernel work).
 - `PSMixPlan32.Run`: no NumPy equivalent (the PS mixing of HE-AAC v2 over a slot of short runs); timed against the plain-Go loop by `BenchmarkPSMix32`, and in go-avkit/decode#77.
 - `AllPass3Plan32.RunTick`: the kernel of `AllPass3Split32` behind a tick counter, no per-call check; `BenchmarkAllPass3Split32/plan-tick`.
 - `AllPass3Plan32.Out`: an accessor of the plan's output planes, no work to time.
