@@ -3,6 +3,7 @@ package floats
 import (
 	"errors"
 	"fmt"
+	"unsafe"
 )
 
 // # AllPass3Plan32: the memory of a split-plane decorrelator, proved once
@@ -29,6 +30,12 @@ type AllPass3Plan32 struct {
 	wStride  [3]int
 	wSlots   [3]int
 	inDelay  int
+
+	// the cursors of the last tick, so that the next one needs no division
+	warm  bool
+	lastT int
+	wCur  [3]uint
+	inCur uint
 }
 
 // NewAllPass3TickPlan32 proves the memory of n = len(t.PhiRe) rows for a decorrelator driven
@@ -103,26 +110,61 @@ func (p *AllPass3Plan32) Out() Split32 { return p.out }
 // is in range), so a call checks nothing and cannot panic for any t, negative or not; a
 // negative t reduces as uint(t) does, memory-safe but not continuous.
 func (p *AllPass3Plan32) RunTick(t int) {
-	var old, cur [3]Split32
 	u := uint(t)
-	n := uint(p.n)
+	if p.warm && t == p.lastT+1 && t > 0 {
+		// the next tick: every cursor advances by one slot, with no division
+		for l := range p.wCur {
+			if p.wCur[l]++; p.wCur[l] == uint(p.wSlots[l]) {
+				p.wCur[l] = 0
+			}
+		}
+		if p.inCur++; p.inCur == uint(p.inSlots) {
+			p.inCur = 0
+		}
+	} else {
+		for l := range p.wCur {
+			p.wCur[l] = u % uint(p.wSlots[l])
+		}
+		p.inCur = u % uint(p.inSlots)
+	}
+	p.lastT, p.warm = t, t >= 0
+	// the offsets, in elements, of the slots of this tick: in range by construction
+	// (slots * stride <= len, n <= stride)
+	var old, cur [3]uint
 	for l := range old {
-		m := uint(p.wSlots[l])
-		c := u % m
-		o := c + 1
-		if o == m {
+		o := p.wCur[l] + 1
+		if o == uint(p.wSlots[l]) {
 			o = 0
 		}
-		s := uint(p.wStride[l])
-		w := &p.w[l]
-		old[l] = Split32{w.Re[o*s : o*s+n], w.Im[o*s : o*s+n]}
-		cur[l] = Split32{w.Re[c*s : c*s+n], w.Im[c*s : c*s+n]}
+		old[l], cur[l] = o*uint(p.wStride[l]), p.wCur[l]*uint(p.wStride[l])
 	}
 	k := uint(p.inSlots)
-	i := u%k + k - uint(p.inDelay)
+	i := p.inCur + k - uint(p.inDelay)
 	if i >= k {
 		i -= k
 	}
-	s := uint(p.inStride)
-	allPass3Split32(p.n, p.out, Split32{p.in.Re[i*s : i*s+n], p.in.Im[i*s : i*s+n]}, &p.t, &old, &cur)
+	p.kernel(i*uint(p.inStride), &old, &cur)
+}
+
+// ptrSlice is s[off : off+n] without the bounds checks: the plan proved at construction that
+// every slot it names lies inside its ring.
+func ptrSlice(s []float32, off, n uint) []float32 {
+	return unsafe.Slice(elemPtr(s, off), n)
+}
+
+// elemPtr is &s[off] without the bounds check, under the same proof as ptrSlice.
+func elemPtr(s []float32, off uint) *float32 {
+	return (*float32)(unsafe.Add(unsafe.Pointer(unsafe.SliceData(s)), off*4))
+}
+
+// kernelSlices runs the kernel through slices on the slots at the offsets inOff, old and cur
+// (in elements) of the rings.
+func (p *AllPass3Plan32) kernelSlices(inOff uint, old, cur *[3]uint) {
+	n := uint(p.n)
+	var o, c [3]Split32
+	for l := range o {
+		o[l] = Split32{ptrSlice(p.w[l].Re, old[l], n), ptrSlice(p.w[l].Im, old[l], n)}
+		c[l] = Split32{ptrSlice(p.w[l].Re, cur[l], n), ptrSlice(p.w[l].Im, cur[l], n)}
+	}
+	allPass3Split32(p.n, p.out, Split32{ptrSlice(p.in.Re, inOff, n), ptrSlice(p.in.Im, inOff, n)}, &p.t, &o, &c)
 }

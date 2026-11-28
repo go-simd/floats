@@ -59,7 +59,13 @@ func TestAllPass3Plan32RunTickMatches(t *testing.T) {
 		if p.Rows() != c.n {
 			t.Fatalf("Rows = %d, want %d", p.Rows(), c.n)
 		}
+		ticks := []int{}
 		for tick := -2; tick < 40; tick++ {
+			ticks = append(ticks, tick)
+		}
+		// repeats, skips, backward steps and a huge tick leave the cursors right too
+		ticks = append(ticks, 5, 5, 6, 100, 101, 3, 4, 4, 0, 1, -1, 0, 1, 2, 1<<62, 1<<62+1)
+		for _, tick := range ticks {
 			p.RunTick(tick)
 			u := uint(tick)
 			var old, cur [3]Split32
@@ -219,6 +225,14 @@ func TestAllPass3Plan32Overlap(t *testing.T) {
 	m.in = Split32{append([]float32(nil), m.in.Re...), m.in.Re[:len(m.in.Re):len(m.in.Re)]}
 	if _, err := m.plan(); err != nil {
 		t.Errorf("read-only operands sharing memory were refused: %v", err)
+	}
+}
+
+// TestAllPass3Split32DoesNotAllocate: the checked call allocates nothing.
+func TestAllPass3Split32DoesNotAllocate(t *testing.T) {
+	f := newAP32Fix(rand.New(rand.NewSource(36)), 34, 0)
+	if a := testing.AllocsPerRun(100, func() { AllPass3Split32(f.out, f.in, &f.t, &f.old, &f.cur) }); a != 0 {
+		t.Errorf("AllPass3Split32 allocates %v times per call", a)
 	}
 }
 

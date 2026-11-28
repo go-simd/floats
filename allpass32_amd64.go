@@ -17,6 +17,21 @@ func allPass3Split32AVX2(n int, mask *int32, outre, outim, inre, inim, phire, ph
 // allPass32TailMask[8-r : 16-r] is the mask of a tail of r rows (r in 1..7).
 var allPass32TailMask = [16]int32{-1, -1, -1, -1, -1, -1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0}
 
+// kernel is kernelSlices without the slices: the pointers of the slots go straight to the
+// assembly (the plan proved every slot in range).
+func (p *AllPass3Plan32) kernel(inOff uint, old, cur *[3]uint) {
+	if !hasAVX2FMA {
+		p.kernelSlices(inOff, old, cur)
+		return
+	}
+	t, w := &p.t, &p.w
+	allPass3Split32AVX2(p.n, &allPass32TailMask[8-p.n&7], &p.out.Re[0], &p.out.Im[0], elemPtr(p.in.Re, inOff), elemPtr(p.in.Im, inOff),
+		&t.PhiRe[0], &t.PhiIm[0], &t.Q0Re[0], &t.Q0Im[0], &t.Q1Re[0], &t.Q1Im[0], &t.Q2Re[0], &t.Q2Im[0], &t.C0[0], &t.C1[0], &t.C2[0],
+		elemPtr(w[0].Re, old[0]), elemPtr(w[0].Im, old[0]), elemPtr(w[0].Re, cur[0]), elemPtr(w[0].Im, cur[0]),
+		elemPtr(w[1].Re, old[1]), elemPtr(w[1].Im, old[1]), elemPtr(w[1].Re, cur[1]), elemPtr(w[1].Im, cur[1]),
+		elemPtr(w[2].Re, old[2]), elemPtr(w[2].Im, old[2]), elemPtr(w[2].Re, cur[2]), elemPtr(w[2].Im, cur[2]))
+}
+
 func allPass3Split32(n int, out, in Split32, t *AllPassRows32, old, cur *[3]Split32) {
 	if !hasAVX2FMA {
 		allPass3Split32Ref(n, out, in, t, old, cur)

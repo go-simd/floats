@@ -66,7 +66,8 @@ func AllPass3Split32(out, in Split32, t *AllPassRows32, old, cur *[3]Split32) {
 	if allPass32Short(n, out, in, t, old, cur) {
 		panic("floats: AllPass3Split32: an operand is shorter than len(out.Re)")
 	}
-	if spansMeet(allPass32Written(n, out, cur), allPass32Read(n, in, t, old)) {
+	w, r := allPass32Written(n, out, cur), allPass32Read(n, in, t, old)
+	if spansMeet(w[:], r[:]) {
 		panic("floats: AllPass3Split32: a written slice overlaps another operand")
 	}
 	allPass3Split32(n, out, in, t, old, cur)
@@ -91,24 +92,22 @@ func fspan32(s []float32, n int) span {
 }
 
 // allPass32Written is the byte ranges of the n first elements of everything the kernel writes.
-func allPass32Written(n int, out Split32, cur *[3]Split32) []span {
-	w := make([]span, 0, 8)
-	w = append(w, fspan32(out.Re, n), fspan32(out.Im, n))
+func allPass32Written(n int, out Split32, cur *[3]Split32) (w [8]span) {
+	w[0], w[1] = fspan32(out.Re, n), fspan32(out.Im, n)
 	for l := range cur {
-		w = append(w, fspan32(cur[l].Re, n), fspan32(cur[l].Im, n))
+		w[2+2*l], w[3+2*l] = fspan32(cur[l].Re, n), fspan32(cur[l].Im, n)
 	}
 	return w
 }
 
 // allPass32Read is the byte ranges of the n first elements of everything the kernel reads.
-func allPass32Read(n int, in Split32, t *AllPassRows32, old *[3]Split32) []span {
-	r := make([]span, 0, 19)
-	r = append(r, fspan32(in.Re, n), fspan32(in.Im, n),
+func allPass32Read(n int, in Split32, t *AllPassRows32, old *[3]Split32) (r [19]span) {
+	r = [19]span{fspan32(in.Re, n), fspan32(in.Im, n),
 		fspan32(t.PhiRe, n), fspan32(t.PhiIm, n), fspan32(t.Q0Re, n), fspan32(t.Q0Im, n),
 		fspan32(t.Q1Re, n), fspan32(t.Q1Im, n), fspan32(t.Q2Re, n), fspan32(t.Q2Im, n),
-		fspan32(t.C0, n), fspan32(t.C1, n), fspan32(t.C2, n))
+		fspan32(t.C0, n), fspan32(t.C1, n), fspan32(t.C2, n)}
 	for l := range old {
-		r = append(r, fspan32(old[l].Re, n), fspan32(old[l].Im, n))
+		r[13+2*l], r[14+2*l] = fspan32(old[l].Re, n), fspan32(old[l].Im, n)
 	}
 	return r
 }

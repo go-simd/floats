@@ -9,11 +9,15 @@
 //	                     oi = dr*ai (VMULPS), oi = oi + di*ar (VFMADD231PS);
 //	c = x + cl*p: VFMADD231PS; x = p - cl*c: VFNMADD231PS.
 //
-// The rows left after the full blocks (1 to 7) run through one more block whose loads and
-// stores are VMASKMOVPS under a mask of the first rows: a masked-off lane neither reads nor
-// writes memory (no fault, nothing past n touched), so the tail is the same code as a full
-// block. The mask is read from the caller: R9 points at 8 int32, the first `rows` of them
-// -1 and the rest 0.
+// The rows left after the full blocks (1 to 7): when n >= 8, one more full block over the
+// LAST 8 rows (n-8 .. n-1), recomputing up to 7 rows the previous block already wrote. That is
+// harmless because the written operands (out, new links) never overlap what is read (the
+// caller proves it), so a row's result does not depend on whether it ran once or twice, and it
+// avoids VMASKMOVPS stores, which are slow on Zen 4 (measured: the masked tail doubled the
+// time of a 34 row call). When n < 8, a block whose loads and stores are VMASKMOVPS under a
+// mask of the first rows: a masked-off lane neither reads nor writes memory (no fault, nothing
+// past n touched). The mask is read from the caller: R9 points at 8 int32, the first `rows`
+// of them -1 and the rest 0.
 //
 // AX = byte offset of the block (4 per row, in every plane and in the coefficient tables),
 // DX = rows left. Every operand pointer is reloaded from its argument slot where it is used
@@ -114,7 +118,11 @@ func kernel() *amd64.Builder {
 		Label("apblk").Raw("CMPQ DX, $8").Raw("JLT aptail")
 	block(b, false)
 	b.Raw("ADDQ $32, AX").Raw("SUBQ $8, DX").Raw("JMP apblk").
-		Label("aptail").Raw("TESTQ DX, DX").Raw("JEQ apdone").Raw("VMOVDQU (R9), Y15")
+		Label("aptail").Raw("TESTQ DX, DX").Raw("JEQ apdone").
+		LoadArg("n", "CX").Raw("CMPQ CX, $8").Raw("JLT apmask").
+		Raw("LEAQ -8(CX), AX").Raw("SHLQ $2, AX")
+	block(b, false) // the last 8 rows again: the overlap is recomputed to the same values
+	b.Raw("JMP apdone").Label("apmask").Raw("VMOVDQU (R9), Y15")
 	block(b, true)
 	b.Label("apdone").Raw("VZEROUPPER").Ret()
 	return b

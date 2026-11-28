@@ -12,6 +12,7 @@ func TestAllPass3Split32PortableForced(t *testing.T) {
 	hasAVX2FMA = false
 	TestAllPass3Split32Bound(t)
 	TestAllPass3Split32Matches64(t)
+	TestAllPass3Plan32RunTickMatches(t)
 }
 
 // TestAllPass3Split32TailMask: the mask of a tail of r rows has its first r entries set.
