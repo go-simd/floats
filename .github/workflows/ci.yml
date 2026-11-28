@@ -66,6 +66,31 @@ jobs:
       # perf.json generates, every public function has a case or an entry in
       # docs/perf-exempt.md.
       - run: cd bench/perf && go vet ./... && go test -count=1 ./...
+  # The portable fallbacks (binop_generic.go, binop32_generic.go, extrema32_generic.go,
+  # kernels_generic.go, maxmin_generic.go, mul_generic.go, round_generic.go and their
+  # tests) are built only where no architecture has assembly: none of the six lanes
+  # above compiles them (found by buildscan). linux/386 runs natively on the amd64
+  # runner (32-bit int, so it also catches int-width assumptions) and js/wasm runs
+  # under node; both go through the same tests as the assembly lanes.
+  generic:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { goos: linux, goarch: "386", flags: "" }
+          - { goos: js, goarch: wasm, flags: "-short" }
+    env:
+      GOOS: ${{ matrix.goos }}
+      GOARCH: ${{ matrix.goarch }}
+      CGO_ENABLED: "0"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with: { go-version: '1.27.3' }
+      - run: go vet ./...
+      - run: echo "$(go env GOROOT)/lib/wasm" >> "$GITHUB_PATH"
+      - run: go test -count=1 ${{ matrix.flags }} .
   # macOS and Windows.
   #
   # A fleet audit of the 601 repositories holding Go code found the OS axis to

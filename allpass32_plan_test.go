@@ -1,6 +1,7 @@
 package floats
 
 import (
+	"math/bits"
 	"math/rand"
 	"strings"
 	"testing"
@@ -64,7 +65,7 @@ func TestAllPass3Plan32RunTickMatches(t *testing.T) {
 			ticks = append(ticks, tick)
 		}
 		// repeats, skips, backward steps and a huge tick leave the cursors right too
-		ticks = append(ticks, 5, 5, 6, 100, 101, 3, 4, 4, 0, 1, -1, 0, 1, 2, 1<<62, 1<<62+1)
+		ticks = append(ticks, 5, 5, 6, 100, 101, 3, 4, 4, 0, 1, -1, 0, 1, 2, 1<<(bits.UintSize-2), 1<<(bits.UintSize-2)+1)
 		for _, tick := range ticks {
 			p.RunTick(tick)
 			u := uint(tick)
